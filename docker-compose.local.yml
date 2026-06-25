@@ -1,0 +1,47 @@
+# 로컬에서 MySQL 환경 테스트 시 사용 (기본 로컬은 H2 사용)
+# 실행: docker compose -f docker-compose.local.yml up -d
+services:
+  db:
+    image: mysql:8.0
+    container_name: tagup-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: tagupdb
+      MYSQL_USER: tagup
+      MYSQL_PASSWORD: taguppassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-prootpassword"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tagup-local
+
+  app:
+    build: .
+    container_name: tagup-backend-local
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:mysql://db:3306/tagupdb?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8
+      DB_USERNAME: tagup
+      DB_PASSWORD: taguppassword
+      JWT_SECRET: local-test-secret-key-must-be-at-least-256-bits-long-for-hs256
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tagup-local
+
+volumes:
+  mysql-data:
+
+networks:
+  tagup-local:
+    driver: bridge
