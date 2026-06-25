@@ -1,0 +1,17 @@
+.gradle
+build/
+.git
+.gitignore
+.idea
+.vscode
+*.iml
+*.iws
+*.ipr
+out/
+logs/
+*.log
+.env*
+!.env.example
+src/main/resources/application-local.yml
+README.md
+CHANGELOG.md
