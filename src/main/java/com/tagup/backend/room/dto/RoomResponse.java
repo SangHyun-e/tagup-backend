@@ -9,6 +9,7 @@ public record RoomResponse(
         String tagCode,
         String name,
         String createdByNickname,
+        boolean chatEnabled,
         LocalDateTime createdAt
 ) {
     public static RoomResponse from(Room room) {
@@ -17,6 +18,7 @@ public record RoomResponse(
                 room.getTagCode(),
                 room.getName(),
                 room.getCreatedBy().getNickname(),
+                room.isChatEnabled(),
                 room.getCreatedAt()
         );
     }
