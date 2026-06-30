@@ -15,10 +15,10 @@ public interface GameRepository extends JpaRepository<Game, Long> {
 
     Optional<Game> findByKboGameId(String kboGameId);
 
-    @Query("SELECT g FROM Game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE g.gameDate = :date ORDER BY g.gameTime ASC NULLS LAST")
+    @Query("SELECT g FROM Game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE g.gameDate = :date ORDER BY g.gameTime ASC")
     List<Game> findByGameDateWithTeams(@Param("date") LocalDate date);
 
-    @Query("SELECT g FROM Game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE g.gameDate BETWEEN :from AND :to ORDER BY g.gameDate ASC, g.gameTime ASC NULLS LAST")
+    @Query("SELECT g FROM Game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE g.gameDate BETWEEN :from AND :to ORDER BY g.gameDate ASC, g.gameTime ASC")
     List<Game> findByGameDateBetweenWithTeams(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
     @Query("SELECT DISTINCT CASE WHEN g.homeTeam = :team THEN g.awayTeam ELSE g.homeTeam END FROM Game g WHERE g.gameDate = :date AND (g.homeTeam = :team OR g.awayTeam = :team) AND g.status != 'CANCELLED'")

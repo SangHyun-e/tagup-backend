@@ -1,179 +1,176 @@
 package com.tagup.backend.game.crawler;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tagup.backend.game.entity.GameStatus;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.RestTemplate;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Component
+@RequiredArgsConstructor
 public class KboGameCrawler {
 
-    // KBO 공식 사이트 단축명과 DB shortName 매핑
-    private static final Map<String, String> TEAM_NAME_MAP = Map.ofEntries(
-            Map.entry("KIA", "KIA"),
-            Map.entry("기아", "KIA"),
-            Map.entry("삼성", "삼성"),
-            Map.entry("LG", "LG"),
-            Map.entry("두산", "두산"),
-            Map.entry("KT", "KT"),
-            Map.entry("SSG", "SSG"),
-            Map.entry("롯데", "롯데"),
-            Map.entry("한화", "한화"),
-            Map.entry("NC", "NC"),
-            Map.entry("키움", "키움")
-    );
-
+    // KBO 공식 사이트 schedule JSON API (form-urlencoded POST)
     private static final String SCHEDULE_URL =
-            "https://www.koreabaseball.com/Schedule/Schedule.aspx";
+            "https://www.koreabaseball.com/ws/Schedule.asmx/GetScheduleList";
 
-    private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+    // "한화3vs5두산" → away=한화, awayScore=3, homeScore=5, home=두산
+    private static final Pattern SCORE_PATTERN = Pattern.compile("(.+?)(\\d+)vs(\\d+)(.+)");
+    // "키움vs롯데" → away=키움, home=롯데 (미경기)
+    private static final Pattern VS_PATTERN = Pattern.compile("(.+?)vs(.+)");
+
+    private static final DateTimeFormatter DATE_PARSER = DateTimeFormatter.ofPattern("MM.dd");
+    private static final DateTimeFormatter TIME_PARSER = DateTimeFormatter.ofPattern("HH:mm");
+
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
 
     public List<CrawledGame> crawlByDate(LocalDate date) {
-        String yyyymm = date.format(DateTimeFormatter.ofPattern("yyyyMM"));
-        String dateStr = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-
         try {
-            Document doc = Jsoup.connect(SCHEDULE_URL)
-                    .userAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
-                    .header("Accept", "text/html,application/xhtml+xml")
-                    .data("yyyymm", yyyymm)
-                    .timeout(10_000)
-                    .get();
-
-            return parseScheduleTable(doc, date, dateStr);
-        } catch (IOException e) {
+            String json = fetchScheduleJson(date.getYear(), date.getMonthValue());
+            return parseGames(json, date);
+        } catch (Exception e) {
             log.warn("KBO 크롤링 실패 date={}: {}", date, e.getMessage());
             return List.of();
         }
     }
 
-    private List<CrawledGame> parseScheduleTable(Document doc, LocalDate date, String dateStr) {
+    private String fetchScheduleJson(int year, int month) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        headers.set("Referer", "https://www.koreabaseball.com/Schedule/Schedule.aspx");
+        headers.set("X-Requested-With", "XMLHttpRequest");
+        headers.set("Accept", "application/json, text/javascript, */*; q=0.01");
+
+        MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
+        params.add("leId", "1");
+        params.add("srIdList", "0,9,6");   // 정규시즌
+        params.add("seasonId", String.valueOf(year));
+        params.add("gameMonth", String.valueOf(month));
+        params.add("teamId", "");
+
+        HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
+        ResponseEntity<String> response = restTemplate.exchange(
+                SCHEDULE_URL, HttpMethod.POST, request, String.class);
+
+        return response.getBody();
+    }
+
+    private List<CrawledGame> parseGames(String json, LocalDate targetDate) throws Exception {
+        JsonNode root = objectMapper.readTree(json);
+        JsonNode rows = root.get("rows");
+
         List<CrawledGame> result = new ArrayList<>();
+        String currentDateStr = null;
 
-        // KBO 공식 사이트 일정 테이블 파싱
-        // 테이블 구조: 날짜 | 시간 | 원정팀 | 스코어 | 홈팀 | 경기장 | 상태
-        Elements rows = doc.select("table.tbl > tbody > tr");
+        for (JsonNode row : rows) {
+            JsonNode cells = row.get("row");
+            if (cells == null || cells.isEmpty()) continue;
 
-        String currentDate = null;
-
-        for (Element row : rows) {
-            Elements cells = row.select("td");
-            if (cells.isEmpty()) continue;
-
-            // 날짜 셀이 있으면 현재 날짜 업데이트
-            Element dateTd = row.selectFirst("td.date");
-            if (dateTd != null) {
-                currentDate = dateTd.text().replaceAll("[^0-9]", "");
+            // 첫 셀이 "day"면 날짜 업데이트
+            String firstClass = cells.get(0).path("Class").asText("");
+            int offset = 0;
+            if ("day".equals(firstClass)) {
+                currentDateStr = stripTags(cells.get(0).path("Text").asText(""));
+                offset = 1;
             }
 
-            // 오늘 날짜 행만 파싱
-            if (!dateStr.equals(currentDate) && currentDate != null && currentDate.length() == 8) {
-                // 날짜가 바뀌었고 오늘이 아니면 스킵
-                if (!date.format(DateTimeFormatter.ofPattern("yyyyMMdd")).equals(currentDate)) {
-                    continue;
-                }
-            }
+            if (currentDateStr == null) continue;
 
-            CrawledGame game = parseGameRow(row, date, cells);
+            // 날짜 필터링: "06.30(월)" 형태에서 월.일 추출
+            String datePart = currentDateStr.length() >= 5 ? currentDateStr.substring(0, 5) : currentDateStr;
+            String targetMonthDay = targetDate.format(DateTimeFormatter.ofPattern("MM.dd"));
+            if (!datePart.equals(targetMonthDay)) continue;
+
+            // 셀 파싱
+            String timeText = stripTags(cells.path(offset).path("Text").asText(""));
+            String playText = stripTags(cells.path(offset + 1).path("Text").asText(""));
+            String relayText = stripTags(cells.path(offset + 2).path("Text").asText(""));
+            String stadiumText = stripTags(cells.path(offset + 6).path("Text").asText(""));
+
+            CrawledGame game = buildGame(targetDate, timeText, playText, relayText, stadiumText);
             if (game != null) {
                 result.add(game);
             }
         }
 
-        log.info("KBO 크롤링 완료 date={}, 경기 수={}", date, result.size());
+        log.info("KBO 크롤링 완료 date={}, 경기 수={}", targetDate, result.size());
         return result;
     }
 
-    private CrawledGame parseGameRow(Element row, LocalDate date, Elements cells) {
-        try {
-            if (cells.size() < 5) return null;
+    private CrawledGame buildGame(LocalDate date, String timeText, String playText,
+                                  String relayText, String stadium) {
+        if (playText.isBlank()) return null;
 
-            // 셀 인덱스는 KBO 실제 HTML 구조에 맞게 조정 필요
-            String timeText = cells.get(0).text().trim();
-            String awayTeamText = cells.get(1).text().trim();
-            String scoreText = cells.get(2).text().trim();
-            String homeTeamText = cells.get(3).text().trim();
-            String stadiumText = cells.size() > 4 ? cells.get(4).text().trim() : "";
-            String statusText = cells.size() > 5 ? cells.get(5).text().trim() : "";
+        String awayShort, homeShort;
+        Integer awayScore = null, homeScore = null;
 
-            String awayShort = resolveTeamShortName(awayTeamText);
-            String homeShort = resolveTeamShortName(homeTeamText);
+        Matcher scoreMatcher = SCORE_PATTERN.matcher(playText);
+        Matcher vsMatcher = VS_PATTERN.matcher(playText);
 
-            if (awayShort == null || homeShort == null) return null;
-
-            LocalTime gameTime = parseTime(timeText);
-            GameStatus status = resolveStatus(statusText, scoreText);
-            int[] scores = parseScore(scoreText);
-
-            String kboGameId = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-                    + "_" + awayShort + "_" + homeShort;
-
-            return CrawledGame.builder()
-                    .kboGameId(kboGameId)
-                    .gameDate(date)
-                    .gameTime(gameTime)
-                    .homeTeamShortName(homeShort)
-                    .awayTeamShortName(awayShort)
-                    .status(status)
-                    .homeScore(scores[0] >= 0 ? scores[0] : null)
-                    .awayScore(scores[1] >= 0 ? scores[1] : null)
-                    .stadium(stadiumText.isEmpty() ? null : stadiumText)
-                    .build();
-
-        } catch (Exception e) {
-            log.debug("경기 행 파싱 실패: {}", e.getMessage());
+        if (scoreMatcher.matches()) {
+            awayShort = scoreMatcher.group(1).trim();
+            awayScore = Integer.parseInt(scoreMatcher.group(2));
+            homeScore = Integer.parseInt(scoreMatcher.group(3));
+            homeShort = scoreMatcher.group(4).trim();
+        } else if (vsMatcher.matches()) {
+            awayShort = vsMatcher.group(1).trim();
+            homeShort = vsMatcher.group(2).trim();
+        } else {
+            log.debug("경기 텍스트 파싱 실패: {}", playText);
             return null;
         }
+
+        LocalTime gameTime = parseTime(timeText);
+        GameStatus status = resolveStatus(relayText, awayScore);
+
+        String kboGameId = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                + "_" + awayShort + "_" + homeShort;
+
+        return CrawledGame.builder()
+                .kboGameId(kboGameId)
+                .gameDate(date)
+                .gameTime(gameTime)
+                .awayTeamShortName(awayShort)
+                .homeTeamShortName(homeShort)
+                .status(status)
+                .awayScore(awayScore)
+                .homeScore(homeScore)
+                .stadium(stadium.isBlank() ? null : stadium)
+                .build();
     }
 
-    private String resolveTeamShortName(String text) {
-        for (Map.Entry<String, String> entry : TEAM_NAME_MAP.entrySet()) {
-            if (text.contains(entry.getKey())) {
-                return entry.getValue();
-            }
-        }
-        return null;
+    private GameStatus resolveStatus(String relayText, Integer score) {
+        if ("취소".equals(relayText) || "우천".equals(relayText)) return GameStatus.CANCELLED;
+        if ("리뷰".equals(relayText) || score != null) return GameStatus.FINISHED;
+        if (relayText.contains("회")) return GameStatus.IN_PROGRESS;
+        return GameStatus.SCHEDULED;
     }
 
     private LocalTime parseTime(String text) {
         try {
-            return LocalTime.parse(text, TIME_FORMATTER);
+            return LocalTime.parse(text.trim(), TIME_PARSER);
         } catch (Exception e) {
             return null;
         }
     }
 
-    private GameStatus resolveStatus(String statusText, String scoreText) {
-        if (statusText.contains("취소") || statusText.contains("우천")) return GameStatus.CANCELLED;
-        if (statusText.contains("진행") || statusText.contains("회")) return GameStatus.IN_PROGRESS;
-        if (scoreText.contains(":") && !scoreText.contains("vs") && !scoreText.isBlank()) {
-            return GameStatus.FINISHED;
-        }
-        return GameStatus.SCHEDULED;
-    }
-
-    private int[] parseScore(String scoreText) {
-        // "3:5" 형식 파싱 → [홈, 원정] (KBO는 원정:홈 표기)
-        try {
-            if (scoreText.contains(":")) {
-                String[] parts = scoreText.split(":");
-                int away = Integer.parseInt(parts[0].trim());
-                int home = Integer.parseInt(parts[1].trim());
-                return new int[]{home, away};
-            }
-        } catch (Exception ignored) {}
-        return new int[]{-1, -1};
+    private String stripTags(String html) {
+        return html.replaceAll("<[^>]+>", "").trim();
     }
 }
