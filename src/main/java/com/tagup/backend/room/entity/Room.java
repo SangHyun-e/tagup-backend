@@ -32,6 +32,9 @@ public class Room {
     @JoinColumn(name = "created_by", nullable = false)
     private User createdBy;
 
+    @Column(nullable = false)
+    private boolean chatEnabled = false;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -41,5 +44,9 @@ public class Room {
         this.tagCode = tagCode;
         this.name = name;
         this.createdBy = createdBy;
+    }
+
+    public void setChatEnabled(boolean chatEnabled) {
+        this.chatEnabled = chatEnabled;
     }
 }
