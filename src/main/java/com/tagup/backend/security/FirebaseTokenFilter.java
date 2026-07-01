@@ -46,11 +46,15 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
     }
 
     private User resolveUser(String token) {
-        // Firebase 미초기화 시 (로컬 개발 모드) — 토큰을 firebaseUid로 직접 조회
+        // Firebase 미초기화 시 (로컬 개발 모드)
         if (FirebaseApp.getApps().isEmpty()) {
-            return userRepository.findByFirebaseUid(token)
-                    .or(() -> userRepository.findByEmail(token))
-                    .orElse(null);
+            // 실제 Firebase JWT(3파트 base64)는 검증 불가 — 401 처리
+            if (isJwt(token)) {
+                log.debug("[Firebase] 미초기화 상태에서 Firebase JWT 수신 — 인증 불가 (FIREBASE_PROJECT_ID 설정 필요)");
+                return null;
+            }
+            // 개발 모드: 짧은 uid 문자열로 직접 조회
+            return userRepository.findByFirebaseUid(token).orElse(null);
         }
 
         try {
@@ -72,6 +76,10 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
             log.debug("[Firebase] 토큰 검증 실패: {}", e.getMessage());
             return null;
         }
+    }
+
+    private boolean isJwt(String token) {
+        return token.length() > 100 && token.chars().filter(c -> c == '.').count() == 2;
     }
 
     private String extractToken(HttpServletRequest request) {

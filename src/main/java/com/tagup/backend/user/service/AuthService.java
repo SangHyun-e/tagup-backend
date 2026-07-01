@@ -62,11 +62,14 @@ public class AuthService {
             throw new CustomException(ErrorCode.UNAUTHORIZED);
         }
 
-        // Firebase 미초기화 (로컬 개발 모드): 토큰을 uid로 직접 사용
+        // Firebase 미초기화 (로컬 개발 모드)
         if (FirebaseApp.getApps().isEmpty()) {
-            log.warn("[Firebase] 미초기화 상태 — 토큰을 uid로 직접 사용 (개발 모드)");
-            String email = token.contains("@") ? token : token + "@dev.local";
-            return new FirebaseUserInfo(token, email);
+            // 실제 Firebase JWT는 검증 불가
+            if (token.length() > 100 && token.chars().filter(c -> c == '.').count() == 2) {
+                throw new CustomException(ErrorCode.INVALID_FIREBASE_TOKEN);
+            }
+            log.warn("[Firebase] 미초기화 상태 — uid를 직접 사용 (개발 모드)");
+            return new FirebaseUserInfo(token, token + "@dev.local");
         }
 
         try {
