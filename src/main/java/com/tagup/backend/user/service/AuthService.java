@@ -1,5 +1,7 @@
 package com.tagup.backend.user.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
@@ -16,6 +18,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Base64;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -24,11 +28,6 @@ public class AuthService {
     private final UserRepository userRepository;
     private final TeamRepository teamRepository;
 
-    /**
-     * Firebase ID Token으로 유저를 조회 또는 생성하고, 닉네임을 저장합니다.
-     * - 신규 유저: Firebase UID + email + nickname으로 생성
-     * - 기존 유저: 닉네임 업데이트
-     */
     @Transactional
     public UserProfileResponse sync(String firebaseToken, SyncUserRequest request) {
         FirebaseUserInfo firebaseInfo = verifyToken(firebaseToken);
@@ -64,11 +63,12 @@ public class AuthService {
 
         // Firebase 미초기화 (로컬 개발 모드)
         if (FirebaseApp.getApps().isEmpty()) {
-            // 실제 Firebase JWT는 검증 불가
-            if (token.length() > 100 && token.chars().filter(c -> c == '.').count() == 2) {
-                throw new CustomException(ErrorCode.INVALID_FIREBASE_TOKEN);
+            if (isJwt(token)) {
+                // 서명 검증 없이 payload만 디코딩 (개발 모드 전용)
+                return decodeJwtPayload(token);
             }
-            log.warn("[Firebase] 미초기화 상태 — uid를 직접 사용 (개발 모드)");
+            // 짧은 uid 문자열 직접 사용
+            log.warn("[Firebase] 미초기화 — uid 직접 사용 (개발 모드): {}", token);
             return new FirebaseUserInfo(token, token + "@dev.local");
         }
 
@@ -79,6 +79,32 @@ public class AuthService {
             log.warn("[Firebase] 토큰 검증 실패: {}", e.getMessage());
             throw new CustomException(ErrorCode.INVALID_FIREBASE_TOKEN);
         }
+    }
+
+    // 로컬 개발 모드 전용: 서명 미검증, uid/email만 추출
+    private FirebaseUserInfo decodeJwtPayload(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(padBase64(parts[1]));
+            JsonNode payload = new ObjectMapper().readTree(payloadBytes);
+
+            String uid = payload.path("user_id").asText(payload.path("sub").asText());
+            String email = payload.path("email").asText(uid + "@firebase.local");
+
+            log.warn("[Firebase] 미초기화 — JWT 서명 미검증, uid={} email={} (개발 모드)", uid, email);
+            return new FirebaseUserInfo(uid, email);
+        } catch (Exception e) {
+            log.warn("[Firebase] JWT payload 파싱 실패: {}", e.getMessage());
+            throw new CustomException(ErrorCode.INVALID_FIREBASE_TOKEN);
+        }
+    }
+
+    private boolean isJwt(String token) {
+        return token.length() > 100 && token.chars().filter(c -> c == '.').count() == 2;
+    }
+
+    private String padBase64(String s) {
+        return s + "=".repeat((4 - s.length() % 4) % 4);
     }
 
     private record FirebaseUserInfo(String uid, String email) {}

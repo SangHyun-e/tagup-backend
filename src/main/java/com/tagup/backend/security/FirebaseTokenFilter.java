@@ -1,5 +1,7 @@
 package com.tagup.backend.security;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
@@ -17,6 +19,7 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Base64;
 import java.util.List;
 
 @Slf4j
@@ -46,15 +49,11 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
     }
 
     private User resolveUser(String token) {
-        // Firebase 미초기화 시 (로컬 개발 모드)
         if (FirebaseApp.getApps().isEmpty()) {
-            // 실제 Firebase JWT(3파트 base64)는 검증 불가 — 401 처리
-            if (isJwt(token)) {
-                log.debug("[Firebase] 미초기화 상태에서 Firebase JWT 수신 — 인증 불가 (FIREBASE_PROJECT_ID 설정 필요)");
-                return null;
-            }
-            // 개발 모드: 짧은 uid 문자열로 직접 조회
-            return userRepository.findByFirebaseUid(token).orElse(null);
+            // 로컬 개발 모드: JWT면 payload 디코딩으로 uid 추출, 아니면 token을 uid로 직접 사용
+            String uid = isJwt(token) ? extractUidFromJwt(token) : token;
+            if (uid == null) return null;
+            return userRepository.findByFirebaseUid(uid).orElse(null);
         }
 
         try {
@@ -63,14 +62,11 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
             String email = decoded.getEmail();
 
             return userRepository.findByFirebaseUid(uid)
-                    .or(() -> {
-                        // 이미 이메일로 가입된 유저가 있으면 Firebase UID 연결
-                        return userRepository.findByEmail(email).map(u -> {
-                            u.linkFirebaseUid(uid);
-                            return userRepository.save(u);
-                        });
-                    })
-                    .orElse(null); // 미가입 유저 — sync 엔드포인트에서 생성
+                    .or(() -> userRepository.findByEmail(email).map(u -> {
+                        u.linkFirebaseUid(uid);
+                        return userRepository.save(u);
+                    }))
+                    .orElse(null);
 
         } catch (Exception e) {
             log.debug("[Firebase] 토큰 검증 실패: {}", e.getMessage());
@@ -78,8 +74,25 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         }
     }
 
+    // 로컬 개발 모드 전용: 서명 미검증, uid만 추출
+    private String extractUidFromJwt(String token) {
+        try {
+            String[] parts = token.split("\\.");
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(padBase64(parts[1]));
+            JsonNode payload = new ObjectMapper().readTree(payloadBytes);
+            return payload.path("user_id").asText(payload.path("sub").asText(null));
+        } catch (Exception e) {
+            log.debug("[Firebase] JWT payload 파싱 실패: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private boolean isJwt(String token) {
         return token.length() > 100 && token.chars().filter(c -> c == '.').count() == 2;
+    }
+
+    private String padBase64(String s) {
+        return s + "=".repeat((4 - s.length() % 4) % 4);
     }
 
     private String extractToken(HttpServletRequest request) {
