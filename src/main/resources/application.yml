@@ -27,9 +27,11 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.H2Dialect
 
-jwt:
-  secret: local-dev-secret-key-must-be-at-least-256-bits-long-for-hs256
-  expiration: 86400000
+# Firebase (로컬 개발: 미설정 시 Firebase 인증 비활성화됨)
+firebase:
+  project-id: ${FIREBASE_PROJECT_ID:}
+  credentials-path: ${FIREBASE_CREDENTIALS_PATH:}
+  credentials-base64: ${FIREBASE_CREDENTIALS:}
 
 springdoc:
   swagger-ui:
@@ -56,9 +58,9 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
 
-jwt:
-  secret: ${JWT_SECRET}
-  expiration: 86400000
+firebase:
+  project-id: ${FIREBASE_PROJECT_ID}
+  credentials-base64: ${FIREBASE_CREDENTIALS}
 
 management:
   endpoints:
