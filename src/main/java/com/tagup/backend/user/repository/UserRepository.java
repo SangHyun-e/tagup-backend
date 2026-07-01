@@ -11,6 +11,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByEmail(String email);
     boolean existsByEmail(String email);
 
+    Optional<User> findByFirebaseUid(String firebaseUid);
+
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.favoriteTeam WHERE u.id = :id")
     Optional<User> findByIdWithTeam(@Param("id") Long id);
 }

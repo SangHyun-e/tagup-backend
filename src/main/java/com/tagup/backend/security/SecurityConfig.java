@@ -19,7 +19,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
 
     @Bean
@@ -46,8 +45,9 @@ public class SecurityConfig {
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                .headers(headers -> headers.frameOptions(f -> f.sameOrigin())) // H2 console
-                .addFilterBefore(new JwtFilter(jwtUtil, userRepository), UsernamePasswordAuthenticationFilter.class)
+                .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
+                .addFilterBefore(new FirebaseTokenFilter(userRepository),
+                        UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }

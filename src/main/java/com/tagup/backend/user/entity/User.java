@@ -23,10 +23,14 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(unique = true)
+    private String firebaseUid;
+
     @Column(unique = true, nullable = false)
     private String email;
 
-    @Column(nullable = false)
+    // Firebase Auth가 인증을 담당하므로 nullable (소셜 로그인 지원)
+    @Column
     private String password;
 
     @Column(nullable = false, length = 20)
@@ -44,7 +48,8 @@ public class User {
     private LocalDateTime updatedAt;
 
     @Builder
-    public User(String email, String password, String nickname) {
+    public User(String firebaseUid, String email, String password, String nickname) {
+        this.firebaseUid = firebaseUid;
         this.email = email;
         this.password = password;
         this.nickname = nickname;
@@ -52,5 +57,13 @@ public class User {
 
     public void updateFavoriteTeam(Team team) {
         this.favoriteTeam = team;
+    }
+
+    public void updateNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    public void linkFirebaseUid(String firebaseUid) {
+        this.firebaseUid = firebaseUid;
     }
 }
