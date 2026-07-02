@@ -21,12 +21,24 @@ public class GameAdminController {
 
     private final GameCrawlService gameCrawlService;
 
-    @Operation(summary = "KBO 크롤러 수동 실행")
+    @Operation(summary = "특정 날짜 크롤 (실시간 결과 업데이트용)")
     @PostMapping("/crawl")
-    public ResponseEntity<ApiResponse<Void>> crawl(
+    public ResponseEntity<ApiResponse<Void>> crawlByDate(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate target = date != null ? date : LocalDate.now();
         gameCrawlService.crawlAndSave(target);
         return ResponseEntity.ok(ApiResponse.ok("크롤링 완료: " + target));
+    }
+
+    @Operation(summary = "월간 크롤 (해당 월 전체 경기 일정 수집)")
+    @PostMapping("/crawl/month")
+    public ResponseEntity<ApiResponse<Void>> crawlByMonth(
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+        LocalDate today = LocalDate.now();
+        int y = year != null ? year : today.getYear();
+        int m = month != null ? month : today.getMonthValue();
+        gameCrawlService.crawlAndSaveMonth(y, m);
+        return ResponseEntity.ok(ApiResponse.ok(String.format("월간 크롤링 완료: %d-%02d", y, m)));
     }
 }

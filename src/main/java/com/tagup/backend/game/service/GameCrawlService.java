@@ -28,11 +28,21 @@ public class GameCrawlService {
     private final GameRepository gameRepository;
     private final TeamRepository teamRepository;
 
+    /** 특정 날짜 크롤 (실시간 결과 업데이트용) */
     @Transactional
     public void crawlAndSave(LocalDate date) {
-        List<CrawledGame> crawled = kboGameCrawler.crawlByDate(date);
+        saveGames(kboGameCrawler.crawlByDate(date), "date=" + date);
+    }
+
+    /** 월간 크롤 (이번 달 전체 일정 수집용) */
+    @Transactional
+    public void crawlAndSaveMonth(int year, int month) {
+        saveGames(kboGameCrawler.crawlByMonth(year, month), String.format("%d-%02d", year, month));
+    }
+
+    private void saveGames(List<CrawledGame> crawled, String label) {
         if (crawled.isEmpty()) {
-            log.info("크롤링 결과 없음 date={}", date);
+            log.info("크롤링 결과 없음 [{}]", label);
             return;
         }
 
@@ -68,6 +78,6 @@ public class GameCrawlService {
                 saved++;
             }
         }
-        log.info("경기 저장 완료 date={}: 신규={}, 업데이트={}", date, saved, updated);
+        log.info("경기 저장 완료 [{}]: 신규={}, 업데이트={}", label, saved, updated);
     }
 }
