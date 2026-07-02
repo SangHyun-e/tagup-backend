@@ -53,8 +53,14 @@ public class DataInitializer implements ApplicationRunner {
         if (gameRepository.count() > 0) return;
 
         LocalDate today = LocalDate.now();
-        log.info("서버 시작 시 이번 달 경기 일정 자동 크롤링: {}-{}", today.getYear(), today.getMonthValue());
-        gameCrawlService.crawlAndSaveMonth(today.getYear(), today.getMonthValue());
+        int year = today.getYear();
+        int currentMonth = today.getMonthValue();
+
+        // KBO 정규시즌 시작(3월)부터 현재 달까지 전체 크롤
+        log.info("서버 시작 시 KBO 시즌 전체 경기 일정 크롤링: {}.03 ~ {}.{}", year, year, currentMonth);
+        for (int month = 3; month <= currentMonth; month++) {
+            gameCrawlService.crawlAndSaveMonth(year, month);
+        }
     }
 
     private Team createTeam(String name, String shortName, String logoUrl) {
