@@ -27,6 +27,14 @@ public enum ErrorCode {
     // Game
     GAME_NOT_FOUND(HttpStatus.NOT_FOUND, "경기를 찾을 수 없습니다."),
 
+    // Bet
+    BET_NOT_FOUND(HttpStatus.NOT_FOUND, "내기를 찾을 수 없습니다."),
+    NOT_ROOM_MEMBER(HttpStatus.FORBIDDEN, "더그아웃 멤버만 접근할 수 있습니다."),
+    NOT_BET_PARTICIPANT(HttpStatus.FORBIDDEN, "내기 참여자만 접근할 수 있습니다."),
+    BET_NOT_PENDING(HttpStatus.BAD_REQUEST, "수락 대기 중인 내기만 처리할 수 있습니다."),
+    GAME_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 경기에는 내기를 제안할 수 없습니다."),
+    INVALID_BET_TEAM(HttpStatus.BAD_REQUEST, "해당 경기에 참여하지 않는 팀입니다."),
+
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
 
