@@ -3,6 +3,7 @@ package com.tagup.backend.room.controller;
 import com.tagup.backend.common.response.ApiResponse;
 import com.tagup.backend.room.dto.CreateRoomRequest;
 import com.tagup.backend.room.dto.JoinRoomRequest;
+import com.tagup.backend.room.dto.RoomMemberResponse;
 import com.tagup.backend.room.dto.RoomResponse;
 import com.tagup.backend.room.service.RoomService;
 import com.tagup.backend.user.entity.User;
@@ -59,5 +60,14 @@ public class RoomController {
             @AuthenticationPrincipal User user
     ) {
         return ResponseEntity.ok(ApiResponse.ok(roomService.getRoom(roomId, user)));
+    }
+
+    @Operation(summary = "더그아웃 멤버 목록 조회")
+    @GetMapping("/{roomId}/members")
+    public ResponseEntity<ApiResponse<List<RoomMemberResponse>>> getRoomMembers(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(roomService.getRoomMembers(roomId, user)));
     }
 }

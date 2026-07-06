@@ -4,6 +4,7 @@ import com.tagup.backend.common.exception.CustomException;
 import com.tagup.backend.common.exception.ErrorCode;
 import com.tagup.backend.room.dto.CreateRoomRequest;
 import com.tagup.backend.room.dto.JoinRoomRequest;
+import com.tagup.backend.room.dto.RoomMemberResponse;
 import com.tagup.backend.room.dto.RoomResponse;
 import com.tagup.backend.room.entity.Room;
 import com.tagup.backend.room.entity.RoomMember;
@@ -86,6 +87,20 @@ public class RoomService {
         }
 
         return RoomResponse.from(room);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomMemberResponse> getRoomMembers(Long roomId, User user) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        if (!roomMemberRepository.existsByRoomAndUser(room, user)) {
+            throw new CustomException(ErrorCode.FORBIDDEN);
+        }
+
+        return roomMemberRepository.findAllByRoomWithUser(room).stream()
+                .map(RoomMemberResponse::from)
+                .toList();
     }
 
     private String generateUniqueTagCode() {
