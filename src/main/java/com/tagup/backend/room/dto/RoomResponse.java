@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 public record RoomResponse(
         Long id,
         String tagCode,
+        String chatKey,
         String name,
         String createdByNickname,
         boolean chatEnabled,
@@ -16,6 +17,7 @@ public record RoomResponse(
         return new RoomResponse(
                 room.getId(),
                 room.getTagCode(),
+                room.getChatKey(),
                 room.getName(),
                 room.getCreatedBy().getNickname(),
                 room.isChatEnabled(),
