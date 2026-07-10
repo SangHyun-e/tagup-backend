@@ -3,7 +3,7 @@ package com.tagup.backend.bet.dto;
 import com.tagup.backend.bet.entity.Bet;
 import com.tagup.backend.bet.entity.BetResult;
 import com.tagup.backend.bet.entity.BetStatus;
-import com.tagup.backend.game.dto.GameResponse;
+import com.tagup.backend.team.entity.Team;
 
 import java.time.LocalDateTime;
 
@@ -12,6 +12,7 @@ public record BetResponse(
         ProposerInfo proposer,
         ReceiverInfo receiver,
         Long betOnTeamId,
+        TeamInfo betOnTeam,
         String content,
         BetStatus status,
         BetResult proposerResult,
@@ -20,21 +21,27 @@ public record BetResponse(
 ) {
     public record ProposerInfo(Long id, String nickname) {}
     public record ReceiverInfo(Long id, String nickname) {}
+    public record TeamInfo(Long id, String shortName) {}
     public record GameSummary(Long id, String homeTeam, String awayTeam, String gameDate) {}
 
     public static BetResponse from(Bet bet) {
+        Team homeTeam = bet.getGame().getHomeTeam();
+        Team awayTeam = bet.getGame().getAwayTeam();
+        Team betTeam = bet.getBetOnTeamId().equals(homeTeam.getId()) ? homeTeam : awayTeam;
+
         return new BetResponse(
                 bet.getId(),
                 new ProposerInfo(bet.getProposer().getId(), bet.getProposer().getNickname()),
                 new ReceiverInfo(bet.getReceiver().getId(), bet.getReceiver().getNickname()),
                 bet.getBetOnTeamId(),
+                new TeamInfo(betTeam.getId(), betTeam.getShortName()),
                 bet.getContent(),
                 bet.getStatus(),
                 bet.getProposerResult(),
                 new GameSummary(
                         bet.getGame().getId(),
-                        bet.getGame().getHomeTeam().getShortName(),
-                        bet.getGame().getAwayTeam().getShortName(),
+                        homeTeam.getShortName(),
+                        awayTeam.getShortName(),
                         bet.getGame().getGameDate().toString()
                 ),
                 bet.getCreatedAt()

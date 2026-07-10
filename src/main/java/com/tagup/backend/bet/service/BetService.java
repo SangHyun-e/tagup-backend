@@ -54,6 +54,10 @@ public class BetService {
             throw new CustomException(ErrorCode.INVALID_BET_TEAM);
         }
 
+        if (request.receiverId().equals(proposer.getId())) {
+            throw new CustomException(ErrorCode.CANNOT_BET_SELF);
+        }
+
         User receiver = userRepository.findById(request.receiverId())
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
@@ -115,7 +119,7 @@ public class BetService {
                 .toList();
     }
 
-    /** 경기 종료 시 해당 경기의 PENDING/ACCEPTED 배팅 자동 정산 */
+    /** 경기 종료 시 정산: 수락 안 된(PENDING) 내기는 만료 취소, ACCEPTED만 승패 기록 */
     @Transactional
     public void settleByGame(Game game) {
         if (game.getStatus() != GameStatus.FINISHED) return;
@@ -129,18 +133,28 @@ public class BetService {
         Integer awayScore = game.getAwayScore();
         Long homeTeamId = game.getHomeTeam().getId();
 
+        int cancelled = 0;
+        int settled = 0;
         for (Bet bet : bets) {
-            BetResult result = calcResult(bet.getBetOnTeamId(), homeTeamId, homeScore, awayScore);
-            bet.settle(result);
+            if (bet.getStatus() == BetStatus.PENDING) {
+                bet.cancel();
+                cancelled++;
+                continue;
+            }
+            // 크롤링 결손으로 스코어가 없으면 결과 확정 불가 → 다음 정산 주기로 미룸
+            if (homeScore == null || awayScore == null) {
+                log.warn("[정산] 경기 {} 스코어 미수집으로 내기 {} 정산 보류", game.getKboGameId(), bet.getId());
+                continue;
+            }
+            bet.settle(calcResult(bet.getBetOnTeamId(), homeTeamId, homeScore, awayScore));
+            settled++;
         }
 
-        log.info("[정산] 경기 {} 내기 {}건 정산 완료", game.getKboGameId(), bets.size());
+        log.info("[정산] 경기 {} 내기 정산 {}건, 미수락 만료 {}건", game.getKboGameId(), settled, cancelled);
     }
 
     private BetResult calcResult(Long betOnTeamId, Long homeTeamId,
-                                  Integer homeScore, Integer awayScore) {
-        if (homeScore == null || awayScore == null) return BetResult.DRAW;
-
+                                  int homeScore, int awayScore) {
         boolean betOnHome = betOnTeamId.equals(homeTeamId);
         if (homeScore > awayScore) return betOnHome ? BetResult.WIN : BetResult.LOSE;
         if (awayScore > homeScore) return betOnHome ? BetResult.LOSE : BetResult.WIN;

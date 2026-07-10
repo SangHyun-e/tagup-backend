@@ -34,6 +34,7 @@ public enum ErrorCode {
     BET_NOT_PENDING(HttpStatus.BAD_REQUEST, "수락 대기 중인 내기만 처리할 수 있습니다."),
     GAME_ALREADY_STARTED(HttpStatus.BAD_REQUEST, "이미 시작된 경기에는 내기를 제안할 수 없습니다."),
     INVALID_BET_TEAM(HttpStatus.BAD_REQUEST, "해당 경기에 참여하지 않는 팀입니다."),
+    CANNOT_BET_SELF(HttpStatus.BAD_REQUEST, "자기 자신에게는 내기를 제안할 수 없습니다."),
 
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");
