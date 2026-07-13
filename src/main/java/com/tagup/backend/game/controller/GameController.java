@@ -35,6 +35,12 @@ public class GameController {
         return ResponseEntity.ok(ApiResponse.ok(gameService.getTodayGames()));
     }
 
+    @Operation(summary = "다가오는 예정 경기 조회", description = "오늘 이후 가장 가까운 예정 경기일의 경기 목록 (최대 3주 탐색, 휴식기 대응)")
+    @GetMapping("/upcoming")
+    public ResponseEntity<ApiResponse<List<GameResponse>>> getUpcomingGames() {
+        return ResponseEntity.ok(ApiResponse.ok(gameService.getUpcomingGames()));
+    }
+
     @Operation(summary = "경기 상세 조회")
     @GetMapping("/{gameId}")
     public ResponseEntity<ApiResponse<GameResponse>> getGame(@PathVariable Long gameId) {

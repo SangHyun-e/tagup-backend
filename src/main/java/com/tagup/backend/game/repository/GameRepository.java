@@ -21,6 +21,9 @@ public interface GameRepository extends JpaRepository<Game, Long> {
     @Query("SELECT g FROM Game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE g.gameDate BETWEEN :from AND :to ORDER BY g.gameDate ASC, g.gameTime ASC")
     List<Game> findByGameDateBetweenWithTeams(@Param("from") LocalDate from, @Param("to") LocalDate to);
 
+    @Query("SELECT g FROM Game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE g.status = :status AND g.gameDate BETWEEN :from AND :to ORDER BY g.gameDate ASC, g.gameTime ASC")
+    List<Game> findByStatusBetweenWithTeams(@Param("status") GameStatus status, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
     @Query("SELECT DISTINCT CASE WHEN g.homeTeam = :team THEN g.awayTeam ELSE g.homeTeam END FROM Game g WHERE g.gameDate = :date AND (g.homeTeam = :team OR g.awayTeam = :team) AND g.status != 'CANCELLED'")
     List<Team> findOpponentsByTeamAndDate(@Param("team") Team team, @Param("date") LocalDate date);
 
