@@ -29,6 +29,7 @@ import java.util.List;
 public class BetService {
 
     private final BetRepository betRepository;
+    private final BetChatAnnouncer betChatAnnouncer;
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final GameRepository gameRepository;
@@ -147,6 +148,7 @@ public class BetService {
                 continue;
             }
             bet.settle(calcResult(bet.getBetOnTeamId(), homeTeamId, homeScore, awayScore));
+            betChatAnnouncer.announceSettlement(bet, game);
             settled++;
         }
 
