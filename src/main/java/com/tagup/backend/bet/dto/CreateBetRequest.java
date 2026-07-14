@@ -5,9 +5,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateBetRequest(
-        @NotNull(message = "수신자 ID를 입력해주세요.")
-        Long receiverId,
-
         @NotNull(message = "경기 ID를 입력해주세요.")
         Long gameId,
 

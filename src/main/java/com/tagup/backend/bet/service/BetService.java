@@ -15,7 +15,6 @@ import com.tagup.backend.room.entity.Room;
 import com.tagup.backend.room.repository.RoomMemberRepository;
 import com.tagup.backend.room.repository.RoomRepository;
 import com.tagup.backend.user.entity.User;
-import com.tagup.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,7 +32,6 @@ public class BetService {
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final GameRepository gameRepository;
-    private final UserRepository userRepository;
 
     @Transactional
     public BetResponse createBet(Long roomId, CreateBetRequest request, User proposer) {
@@ -55,18 +53,8 @@ public class BetService {
             throw new CustomException(ErrorCode.INVALID_BET_TEAM);
         }
 
-        if (request.receiverId().equals(proposer.getId())) {
-            throw new CustomException(ErrorCode.CANNOT_BET_SELF);
-        }
-
-        User receiver = userRepository.findById(request.receiverId())
-                .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
-
-        validateRoomMember(room, receiver);
-
         Bet bet = Bet.builder()
                 .proposer(proposer)
-                .receiver(receiver)
                 .room(room)
                 .game(game)
                 .content(request.content())
@@ -76,18 +64,21 @@ public class BetService {
         return BetResponse.from(betRepository.save(bet));
     }
 
+    /** 콜! — 방 멤버 누구나 가능 (선착 1명), 제안자의 반대편에 배팅 */
     @Transactional
     public BetResponse acceptBet(Long betId, User user) {
         Bet bet = getBetOrThrow(betId);
 
-        if (!bet.getReceiver().getId().equals(user.getId())) {
-            throw new CustomException(ErrorCode.NOT_BET_PARTICIPANT);
+        validateRoomMember(bet.getRoom(), user);
+
+        if (bet.getProposer().getId().equals(user.getId())) {
+            throw new CustomException(ErrorCode.CANNOT_BET_SELF);
         }
         if (bet.getStatus() != BetStatus.PENDING) {
             throw new CustomException(ErrorCode.BET_NOT_PENDING);
         }
 
-        bet.accept();
+        bet.accept(user);
         return BetResponse.from(bet);
     }
 
@@ -95,9 +86,8 @@ public class BetService {
     public BetResponse cancelBet(Long betId, User user) {
         Bet bet = getBetOrThrow(betId);
 
-        boolean isParticipant = bet.getProposer().getId().equals(user.getId())
-                || bet.getReceiver().getId().equals(user.getId());
-        if (!isParticipant) {
+        // PENDING 상태에는 receiver가 없으므로 제안자만 취소 가능
+        if (!bet.getProposer().getId().equals(user.getId())) {
             throw new CustomException(ErrorCode.NOT_BET_PARTICIPANT);
         }
         if (bet.getStatus() != BetStatus.PENDING) {

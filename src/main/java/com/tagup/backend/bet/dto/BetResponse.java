@@ -32,7 +32,9 @@ public record BetResponse(
         return new BetResponse(
                 bet.getId(),
                 new ProposerInfo(bet.getProposer().getId(), bet.getProposer().getNickname()),
-                new ReceiverInfo(bet.getReceiver().getId(), bet.getReceiver().getNickname()),
+                bet.getReceiver() != null
+                        ? new ReceiverInfo(bet.getReceiver().getId(), bet.getReceiver().getNickname())
+                        : null,
                 bet.getBetOnTeamId(),
                 new TeamInfo(betTeam.getId(), betTeam.getShortName()),
                 bet.getContent(),
