@@ -32,8 +32,9 @@ public class Bet {
     @JoinColumn(name = "proposer_id", nullable = false)
     private User proposer;
 
+    // 오픈 배팅: 콜하기 전까지 비어 있음
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "receiver_id", nullable = false)
+    @JoinColumn(name = "receiver_id")
     private User receiver;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -69,10 +70,9 @@ public class Bet {
     private LocalDateTime updatedAt;
 
     @Builder
-    public Bet(User proposer, User receiver, Room room, Game game,
+    public Bet(User proposer, Room room, Game game,
                String content, Long betOnTeamId) {
         this.proposer = proposer;
-        this.receiver = receiver;
         this.room = room;
         this.game = game;
         this.content = content;
@@ -80,7 +80,8 @@ public class Bet {
         this.status = BetStatus.PENDING;
     }
 
-    public void accept() {
+    public void accept(User receiver) {
+        this.receiver = receiver;
         this.status = BetStatus.ACCEPTED;
     }
 
