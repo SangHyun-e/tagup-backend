@@ -12,7 +12,7 @@ import java.util.List;
 
 public interface BetRepository extends JpaRepository<Bet, Long> {
 
-    @Query("SELECT b FROM Bet b JOIN FETCH b.proposer JOIN FETCH b.receiver JOIN FETCH b.game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE b.room = :room ORDER BY b.createdAt DESC")
+    @Query("SELECT b FROM Bet b JOIN FETCH b.proposer LEFT JOIN FETCH b.receiver JOIN FETCH b.game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE b.room = :room ORDER BY b.createdAt DESC")
     List<Bet> findAllByRoomWithDetails(@Param("room") Room room);
 
     List<Bet> findByGameAndStatusIn(Game game, List<BetStatus> statuses);
