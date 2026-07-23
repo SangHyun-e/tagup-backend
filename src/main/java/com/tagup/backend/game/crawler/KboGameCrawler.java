@@ -106,8 +106,10 @@ public class KboGameCrawler {
             String playText    = stripTags(cells.path(offset + 1).path("Text").asText(""));
             String relayText   = stripTags(cells.path(offset + 2).path("Text").asText(""));
             String stadiumText = stripTags(cells.path(offset + 6).path("Text").asText(""));
+            // 비고 칸(마지막 셀): 정상 '-', 취소 시 '우천취소'/'그라운드사정' 등 사유 표시
+            String noteText    = stripTags(cells.path(cells.size() - 1).path("Text").asText(""));
 
-            CrawledGame game = buildGame(currentDate, timeText, playText, relayText, stadiumText);
+            CrawledGame game = buildGame(currentDate, timeText, playText, relayText, noteText, stadiumText);
             if (game != null) result.add(game);
         }
 
@@ -126,7 +128,7 @@ public class KboGameCrawler {
     }
 
     private CrawledGame buildGame(LocalDate date, String timeText, String playText,
-                                  String relayText, String stadium) {
+                                  String relayText, String noteText, String stadium) {
         if (playText.isBlank()) return null;
 
         String awayShort, homeShort;
@@ -157,18 +159,26 @@ public class KboGameCrawler {
                 .gameTime(parseTime(timeText))
                 .awayTeamShortName(awayShort)
                 .homeTeamShortName(homeShort)
-                .status(resolveStatus(relayText, awayScore))
+                .status(resolveStatus(relayText, noteText, awayScore))
                 .awayScore(awayScore)
                 .homeScore(homeScore)
                 .stadium(stadium.isBlank() ? null : stadium)
                 .build();
     }
 
-    private GameStatus resolveStatus(String relayText, Integer score) {
-        if ("취소".equals(relayText) || "우천".equals(relayText)) return GameStatus.CANCELLED;
-        if ("리뷰".equals(relayText) || score != null) return GameStatus.FINISHED;
+    private GameStatus resolveStatus(String relayText, String noteText, Integer score) {
+        // 점수가 있으면 경기가 치러진 것 (콜드게임 포함) → 종료
+        if (score != null) return GameStatus.FINISHED;
+        // 점수 없이 비고에 사유가 있으면 취소/순연 (우천취소, 그라운드사정 등)
+        if (isCancelledNote(noteText)) return GameStatus.CANCELLED;
+        if ("리뷰".equals(relayText)) return GameStatus.FINISHED;
         if (relayText.contains("회")) return GameStatus.IN_PROGRESS;
         return GameStatus.SCHEDULED;
+    }
+
+    /** 비고 칸이 정상값('-'/빈칸)이 아니면 취소 사유로 간주 ('우천취소', '그라운드사정' 등) */
+    private boolean isCancelledNote(String note) {
+        return note != null && !note.isBlank() && !"-".equals(note);
     }
 
     private LocalTime parseTime(String text) {
