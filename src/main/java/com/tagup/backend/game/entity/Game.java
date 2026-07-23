@@ -51,6 +51,9 @@ public class Game {
     private Integer homeScore;
     private Integer awayScore;
 
+    // 경기 진행 중 현재 이닝 (IN_PROGRESS일 때만 값 존재)
+    private Integer inning;
+
     @Column(length = 50)
     private String stadium;
 
@@ -60,7 +63,7 @@ public class Game {
     @Builder
     public Game(String kboGameId, LocalDate gameDate, LocalTime gameTime,
                 Team homeTeam, Team awayTeam, GameStatus status,
-                Integer homeScore, Integer awayScore, String stadium) {
+                Integer homeScore, Integer awayScore, Integer inning, String stadium) {
         this.kboGameId = kboGameId;
         this.gameDate = gameDate;
         this.gameTime = gameTime;
@@ -69,12 +72,14 @@ public class Game {
         this.status = status;
         this.homeScore = homeScore;
         this.awayScore = awayScore;
+        this.inning = inning;
         this.stadium = stadium;
     }
 
-    public void updateResult(GameStatus status, Integer homeScore, Integer awayScore) {
+    public void updateResult(GameStatus status, Integer homeScore, Integer awayScore, Integer inning) {
         this.status = status;
         this.homeScore = homeScore;
         this.awayScore = awayScore;
+        this.inning = inning;
     }
 }

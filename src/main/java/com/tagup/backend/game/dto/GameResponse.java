@@ -16,6 +16,7 @@ public record GameResponse(
         GameStatus status,
         Integer homeScore,
         Integer awayScore,
+        Integer inning,
         String stadium
 ) {
     public record TeamInfo(Long id, String name, String shortName, String logoUrl) {}
@@ -41,6 +42,7 @@ public record GameResponse(
                 game.getStatus(),
                 game.getHomeScore(),
                 game.getAwayScore(),
+                game.getInning(),
                 game.getStadium()
         );
     }
