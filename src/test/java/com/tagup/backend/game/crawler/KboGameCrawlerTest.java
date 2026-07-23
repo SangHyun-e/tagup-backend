@@ -45,7 +45,11 @@ class KboGameCrawlerTest {
           { "row": [
             {"Class":"day","Text":"07.23(목)"}, {"Class":"time","Text":"18:30"},
             {"Class":"play","Text":"NCvsLG"}, {"Class":"relay","Text":"프리뷰"},
-            {"Text":""}, {"Text":"SS-T"}, {"Text":""}, {"Text":"잠실"}, {"Text":"-"} ] }
+            {"Text":""}, {"Text":"SS-T"}, {"Text":""}, {"Text":"잠실"}, {"Text":"-"} ] },
+          { "row": [
+            {"Class":"time","Text":"18:30"},
+            {"Class":"play","Text":"한화vsKIA"}, {"Class":"relay","Text":"5회"},
+            {"Text":""}, {"Text":"KBSN"}, {"Text":""}, {"Text":"광주"}, {"Text":"-"} ] }
         ] }
         """;
 
@@ -82,6 +86,23 @@ class KboGameCrawlerTest {
         assertThat(finished.homeScore()).isEqualTo(3);
 
         // 비고 '-', relay '프리뷰' → SCHEDULED
-        assertThat(byId.get("20260723_NC_LG").status()).isEqualTo(GameStatus.SCHEDULED);
+        CrawledGame scheduled = byId.get("20260723_NC_LG");
+        assertThat(scheduled.status()).isEqualTo(GameStatus.SCHEDULED);
+        assertThat(scheduled.inning()).isNull();
+    }
+
+    @Test
+    void 진행중_경기는_IN_PROGRESS이고_relay에서_이닝을_추출한다() {
+        Map<String, CrawledGame> byId = crawlerReturning(SAMPLE_JSON).crawlByMonth(2026, 7).stream()
+                .collect(Collectors.toMap(CrawledGame::kboGameId, Function.identity()));
+
+        // relay "5회" → IN_PROGRESS + inning 5
+        CrawledGame live = byId.get("20260723_한화_KIA");
+        assertThat(live.status()).isEqualTo(GameStatus.IN_PROGRESS);
+        assertThat(live.inning()).isEqualTo(5);
+
+        // 종료/취소 경기는 이닝 없음
+        assertThat(byId.get("20260722_SSG_롯데").inning()).isNull();
+        assertThat(byId.get("20260722_NC_LG").inning()).isNull();
     }
 }

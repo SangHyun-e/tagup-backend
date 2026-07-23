@@ -61,7 +61,7 @@ public class GameCrawlService {
 
             Optional<Game> existing = gameRepository.findByKboGameId(cg.kboGameId());
             if (existing.isPresent()) {
-                existing.get().updateResult(cg.status(), cg.homeScore(), cg.awayScore());
+                existing.get().updateResult(cg.status(), cg.homeScore(), cg.awayScore(), cg.inning());
                 updated++;
             } else {
                 gameRepository.save(Game.builder()
@@ -73,6 +73,7 @@ public class GameCrawlService {
                         .status(cg.status() != null ? cg.status() : GameStatus.SCHEDULED)
                         .homeScore(cg.homeScore())
                         .awayScore(cg.awayScore())
+                        .inning(cg.inning())
                         .stadium(cg.stadium())
                         .build());
                 saved++;

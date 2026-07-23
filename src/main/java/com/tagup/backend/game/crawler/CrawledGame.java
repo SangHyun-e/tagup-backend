@@ -16,5 +16,6 @@ public record CrawledGame(
         GameStatus status,
         Integer homeScore,
         Integer awayScore,
+        Integer inning,
         String stadium
 ) {}

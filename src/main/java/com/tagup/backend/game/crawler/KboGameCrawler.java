@@ -30,6 +30,7 @@ public class KboGameCrawler {
 
     private static final Pattern SCORE_PATTERN = Pattern.compile("(.+?)(\\d+)vs(\\d+)(.+)");
     private static final Pattern VS_PATTERN = Pattern.compile("(.+?)vs(.+)");
+    private static final Pattern INNING_PATTERN = Pattern.compile("(\\d+)\\s*회");
     private static final DateTimeFormatter TIME_PARSER = DateTimeFormatter.ofPattern("HH:mm");
     private static final DateTimeFormatter DATE_PARSER = DateTimeFormatter.ofPattern("MM.dd");
 
@@ -160,6 +161,7 @@ public class KboGameCrawler {
                 .awayTeamShortName(awayShort)
                 .homeTeamShortName(homeShort)
                 .status(resolveStatus(relayText, noteText, awayScore))
+                .inning(parseInning(relayText, noteText, awayScore))
                 .awayScore(awayScore)
                 .homeScore(homeScore)
                 .stadium(stadium.isBlank() ? null : stadium)
@@ -174,6 +176,13 @@ public class KboGameCrawler {
         if ("리뷰".equals(relayText)) return GameStatus.FINISHED;
         if (relayText.contains("회")) return GameStatus.IN_PROGRESS;
         return GameStatus.SCHEDULED;
+    }
+
+    /** 진행 중 경기의 현재 이닝. relay 칸의 "5회" 형태에서 숫자만 추출 (그 외 null) */
+    private Integer parseInning(String relayText, String noteText, Integer score) {
+        if (resolveStatus(relayText, noteText, score) != GameStatus.IN_PROGRESS) return null;
+        Matcher m = INNING_PATTERN.matcher(relayText);
+        return m.find() ? Integer.parseInt(m.group(1)) : null;
     }
 
     /** 비고 칸이 정상값('-'/빈칸)이 아니면 취소 사유로 간주 ('우천취소', '그라운드사정' 등) */
