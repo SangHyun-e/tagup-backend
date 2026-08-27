@@ -151,6 +151,15 @@ public class KboGameCrawler {
             return null;
         }
 
+        GameStatus status = resolveStatus(relayText, noteText, awayScore);
+
+        // 진행 중 경기의 점수 칸은 0vs0으로 고정돼 있어 실제 스코어가 아니다.
+        // 잘못된 0:0을 노출/정산에 쓰지 않도록 버린다. (실시간 스코어는 스코어보드 API 필요 — Sprint 4)
+        if (status == GameStatus.IN_PROGRESS) {
+            awayScore = null;
+            homeScore = null;
+        }
+
         String kboGameId = date.format(DateTimeFormatter.ofPattern("yyyyMMdd"))
                 + "_" + awayShort + "_" + homeShort;
 
@@ -160,7 +169,7 @@ public class KboGameCrawler {
                 .gameTime(parseTime(timeText))
                 .awayTeamShortName(awayShort)
                 .homeTeamShortName(homeShort)
-                .status(resolveStatus(relayText, noteText, awayScore))
+                .status(status)
                 .inning(parseInning(relayText, noteText, awayScore))
                 .awayScore(awayScore)
                 .homeScore(homeScore)
@@ -168,13 +177,33 @@ public class KboGameCrawler {
                 .build();
     }
 
+    /**
+     * 경기 상태 판정.
+     *
+     * <p>2026-08-26 야간 경기를 5회 스냅샷해 확인한 실제 응답:
+     * <pre>
+     *   예정   : play="NCvsLG"    relay="프리뷰"  note="-"
+     *   진행 중 : play="NC0vs0LG"  relay=""        note="-"   ← 점수는 0vs0로 고정(실시간 아님)
+     *   종료   : play="NC0vs8LG"  relay="리뷰"    note="-"
+     *   취소   : play="NCvsLG"    relay=""        note="우천취소"
+     * </pre>
+     *
+     * <p><b>진행 중에도 점수 칸이 0vs0으로 채워진다.</b> 과거 로직은 "점수가 있으면 종료"로
+     * 판정해 경기 시작 직후 FINISHED가 되었고, 정산 스케줄러가 이를 0:0 무승부로 정산해버렸다.
+     * 따라서 relay 칸을 먼저 보고 종료 여부를 확정한다.
+     */
     private GameStatus resolveStatus(String relayText, String noteText, Integer score) {
-        // 점수가 있으면 경기가 치러진 것 (콜드게임 포함) → 종료
-        if (score != null) return GameStatus.FINISHED;
-        // 점수 없이 비고에 사유가 있으면 취소/순연 (우천취소, 그라운드사정 등)
+        // 1) 취소/순연 (우천취소, 그라운드사정 등) — 비고 칸이 정상값이 아님
         if (isCancelledNote(noteText)) return GameStatus.CANCELLED;
+        // 2) 종료 확정 — 리뷰 링크가 붙는다
         if ("리뷰".equals(relayText)) return GameStatus.FINISHED;
+        // 3) 이닝 표기가 있는 경우 (일부 응답에서 관측될 수 있음)
         if (relayText.contains("회")) return GameStatus.IN_PROGRESS;
+        // 4) 점수 칸이 채워졌는데 relay가 비어 있으면 진행 중
+        //    (종료 직후 리뷰 링크가 아직 안 붙은 순간도 여기로 온다 → 조기 정산보다 안전)
+        if (score != null && relayText.isBlank()) return GameStatus.IN_PROGRESS;
+        // 5) 그 외 점수가 있으면 종료
+        if (score != null) return GameStatus.FINISHED;
         return GameStatus.SCHEDULED;
     }
 

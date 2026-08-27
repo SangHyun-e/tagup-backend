@@ -49,7 +49,15 @@ class KboGameCrawlerTest {
           { "row": [
             {"Class":"time","Text":"18:30"},
             {"Class":"play","Text":"한화vsKIA"}, {"Class":"relay","Text":"5회"},
-            {"Text":""}, {"Text":"KBSN"}, {"Text":""}, {"Text":"광주"}, {"Text":"-"} ] }
+            {"Text":""}, {"Text":"KBSN"}, {"Text":""}, {"Text":"광주"}, {"Text":"-"} ] },
+          { "row": [
+            {"Class":"day","Text":"08.26(수)"}, {"Class":"time","Text":"18:30"},
+            {"Class":"play","Text":"NC0vs0LG"}, {"Class":"relay","Text":""},
+            {"Text":""}, {"Text":"SS-T"}, {"Text":""}, {"Text":"잠실"}, {"Text":"-"} ] },
+          { "row": [
+            {"Class":"time","Text":"18:30"},
+            {"Class":"play","Text":"삼성12vs2키움"}, {"Class":"relay","Text":"리뷰"},
+            {"Text":"하이라이트"}, {"Text":"SPO"}, {"Text":""}, {"Text":"고척"}, {"Text":"-"} ] }
         ] }
         """;
 
@@ -89,6 +97,39 @@ class KboGameCrawlerTest {
         CrawledGame scheduled = byId.get("20260723_NC_LG");
         assertThat(scheduled.status()).isEqualTo(GameStatus.SCHEDULED);
         assertThat(scheduled.inning()).isNull();
+    }
+
+    /**
+     * 2026-08-26 야간 경기 5회 스냅샷으로 확인한 실제 동작에 대한 회귀 테스트.
+     *
+     * <p>진행 중에도 점수 칸이 "0vs0"으로 채워진다. 과거 로직("점수가 있으면 종료")은
+     * 경기 시작 직후 FINISHED로 판정했고, 정산 스케줄러가 이를 0:0 무승부로 정산해
+     * <b>모든 배팅이 경기 시작 30분 안에 잘못 정산되는</b> 치명적 버그가 있었다.
+     */
+    @Test
+    void 진행중_경기는_점수칸이_0vs0이어도_FINISHED가_아니다() {
+        Map<String, CrawledGame> byId = crawlerReturning(SAMPLE_JSON).crawlByMonth(2026, 8).stream()
+                .collect(Collectors.toMap(CrawledGame::kboGameId, Function.identity()));
+
+        CrawledGame live = byId.get("20260826_NC_LG");
+        assertThat(live.status())
+                .as("relay가 비어 있고 점수 칸이 0vs0이면 진행 중이다 (종료 아님)")
+                .isEqualTo(GameStatus.IN_PROGRESS);
+
+        // 0:0은 실제 스코어가 아니므로 저장하지 않는다 — 정산에 쓰이면 무승부로 오판된다
+        assertThat(live.awayScore()).isNull();
+        assertThat(live.homeScore()).isNull();
+    }
+
+    @Test
+    void 종료_경기는_리뷰_링크와_실제_스코어로_판정한다() {
+        Map<String, CrawledGame> byId = crawlerReturning(SAMPLE_JSON).crawlByMonth(2026, 8).stream()
+                .collect(Collectors.toMap(CrawledGame::kboGameId, Function.identity()));
+
+        CrawledGame finished = byId.get("20260826_삼성_키움");
+        assertThat(finished.status()).isEqualTo(GameStatus.FINISHED);
+        assertThat(finished.awayScore()).isEqualTo(12);
+        assertThat(finished.homeScore()).isEqualTo(2);
     }
 
     @Test
