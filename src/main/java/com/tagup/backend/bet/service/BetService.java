@@ -7,6 +7,7 @@ import com.tagup.backend.bet.entity.BetResult;
 import com.tagup.backend.bet.entity.BetStatus;
 import com.tagup.backend.bet.repository.BetRepository;
 import com.tagup.backend.common.exception.CustomException;
+import com.tagup.backend.notification.service.PushSender;
 import com.tagup.backend.common.exception.ErrorCode;
 import com.tagup.backend.game.entity.Game;
 import com.tagup.backend.game.entity.GameStatus;
@@ -21,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -29,6 +31,7 @@ public class BetService {
 
     private final BetRepository betRepository;
     private final BetChatAnnouncer betChatAnnouncer;
+    private final PushSender pushSender;
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final GameRepository gameRepository;
@@ -61,7 +64,21 @@ public class BetService {
                 .betOnTeamId(request.betOnTeamId())
                 .build();
 
-        return BetResponse.from(betRepository.save(bet));
+        Bet saved = betRepository.save(bet);
+
+        // 제안자를 뺀 방 멤버에게 "받을 사람 콜!" 알림
+        List<User> others = roomMemberRepository.findAllByRoomWithUser(room).stream()
+                .map(rm -> rm.getUser())
+                .filter(u -> !u.getId().equals(proposer.getId()))
+                .toList();
+        pushSender.sendToUsers(others, "⚾ 새 배팅이 올라왔어요",
+                String.format("%s님: \"%s\" · %s 승리에 배팅 — 받을 사람 콜!",
+                        proposer.getNickname(), saved.getContent(),
+                        BetResponse.from(saved).betOnTeam().shortName()),
+                Map.of("type", "BET_CREATED", "roomId", String.valueOf(room.getId()),
+                        "betId", String.valueOf(saved.getId())));
+
+        return BetResponse.from(saved);
     }
 
     /** 콜! — 방 멤버 누구나 가능 (선착 1명), 제안자의 반대편에 배팅 */
@@ -79,6 +96,12 @@ public class BetService {
         }
 
         bet.accept(user);
+
+        pushSender.sendToUsers(List.of(bet.getProposer()), "📣 배팅 성립!",
+                String.format("%s님이 콜했어요 — \"%s\"", user.getNickname(), bet.getContent()),
+                Map.of("type", "BET_ACCEPTED", "roomId", String.valueOf(bet.getRoom().getId()),
+                        "betId", String.valueOf(bet.getId())));
+
         return BetResponse.from(bet);
     }
 
@@ -139,10 +162,30 @@ public class BetService {
             }
             bet.settle(calcResult(bet.getBetOnTeamId(), homeTeamId, homeScore, awayScore));
             betChatAnnouncer.announceSettlement(bet, game);
+            notifySettlement(bet, game, awayScore, homeScore);
             settled++;
         }
 
         log.info("[정산] 경기 {} 내기 정산 {}건, 미수락 만료 {}건", game.getKboGameId(), settled, cancelled);
+    }
+
+    /** 정산 결과를 양측에 푸시 (승자 관점 문구) */
+    private void notifySettlement(Bet bet, Game game, int awayScore, int homeScore) {
+        String score = String.format("%s %d : %d %s",
+                game.getAwayTeam().getShortName(), awayScore,
+                homeScore, game.getHomeTeam().getShortName());
+        String body = bet.getProposerResult() == BetResult.DRAW
+                ? String.format("🤝 무승부! \"%s\" 내기는 무효예요 (%s)", bet.getContent(), score)
+                : String.format("🏆 %s님 승리! \"%s\" (%s)",
+                        bet.getProposerResult() == BetResult.WIN
+                                ? bet.getProposer().getNickname()
+                                : bet.getReceiver().getNickname(),
+                        bet.getContent(), score);
+
+        pushSender.sendToUsers(List.of(bet.getProposer(), bet.getReceiver()),
+                "배팅 정산 완료", body,
+                Map.of("type", "BET_SETTLED", "roomId", String.valueOf(bet.getRoom().getId()),
+                        "betId", String.valueOf(bet.getId())));
     }
 
     private BetResult calcResult(Long betOnTeamId, Long homeTeamId,
