@@ -1,7 +1,7 @@
 package com.tagup.backend.common;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.tagup.backend.bet.dto.BetResponse;
 import com.tagup.backend.bet.entity.BetResult;
 import com.tagup.backend.bet.entity.BetStatus;
@@ -15,7 +15,7 @@ import com.tagup.backend.user.dto.UserProfileResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.boot.autoconfigure.jackson.JacksonAutoConfiguration;
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -45,14 +45,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class ApiContractTest {
 
-    /** Spring Boot가 실제로 쓰는 ObjectMapper 설정 그대로 사용 (JavaTimeModule 등) */
-    private static final ObjectMapper MAPPER = resolveSpringObjectMapper();
+    /** Spring Boot가 실제 HTTP 응답 직렬화에 쓰는 매퍼를 그대로 사용 (Boot 4 = Jackson 3 JsonMapper) */
+    private static final JsonMapper MAPPER = resolveSpringJsonMapper();
 
-    private static ObjectMapper resolveSpringObjectMapper() {
-        final ObjectMapper[] holder = new ObjectMapper[1];
+    private static JsonMapper resolveSpringJsonMapper() {
+        final JsonMapper[] holder = new JsonMapper[1];
         new ApplicationContextRunner()
                 .withConfiguration(AutoConfigurations.of(JacksonAutoConfiguration.class))
-                .run(ctx -> holder[0] = ctx.getBean(ObjectMapper.class));
+                .run(ctx -> holder[0] = ctx.getBean(JsonMapper.class));
         return holder[0];
     }
 
@@ -67,7 +67,7 @@ class ApiContractTest {
     /** 해당 노드의 필드명을 선언 순서대로 반환 */
     private static List<String> keysOf(JsonNode node) {
         List<String> keys = new ArrayList<>();
-        node.fieldNames().forEachRemaining(keys::add);
+        keys.addAll(node.propertyNames());
         return keys;
     }
 
