@@ -1,7 +1,7 @@
 package com.tagup.backend.user.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
@@ -86,10 +86,10 @@ public class AuthService {
         try {
             String[] parts = token.split("\\.");
             byte[] payloadBytes = Base64.getUrlDecoder().decode(padBase64(parts[1]));
-            JsonNode payload = new ObjectMapper().readTree(payloadBytes);
+            JsonNode payload = JsonMapper.builder().build().readTree(payloadBytes);
 
-            String uid = payload.path("user_id").asText(payload.path("sub").asText());
-            String email = payload.path("email").asText(uid + "@firebase.local");
+            String uid = payload.path("user_id").asString(payload.path("sub").asString());
+            String email = payload.path("email").asString(uid + "@firebase.local");
 
             log.warn("[Firebase] 미초기화 — JWT 서명 미검증, uid={} email={} (개발 모드)", uid, email);
             return new FirebaseUserInfo(uid, email);

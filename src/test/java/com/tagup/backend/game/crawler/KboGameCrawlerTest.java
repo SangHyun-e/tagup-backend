@@ -1,6 +1,6 @@
 package com.tagup.backend.game.crawler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import com.tagup.backend.game.entity.GameStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -24,7 +24,7 @@ import static org.mockito.Mockito.when;
  */
 class KboGameCrawlerTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     // 실제 KBO 응답 구조를 그대로 옮긴 픽스처 (2026-07)
     // day 셀이 있는 행(9칸) / 없는 행(8칸) 혼재, 비고 칸은 항상 마지막
@@ -65,7 +65,7 @@ class KboGameCrawlerTest {
         RestTemplate restTemplate = mock(RestTemplate.class);
         when(restTemplate.exchange(any(String.class), any(), any(), eq(String.class)))
                 .thenReturn(ResponseEntity.ok(json));
-        return new KboGameCrawler(restTemplate, objectMapper);
+        return new KboGameCrawler(restTemplate, jsonMapper);
     }
 
     @Test

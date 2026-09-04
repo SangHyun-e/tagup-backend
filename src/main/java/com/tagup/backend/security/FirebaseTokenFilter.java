@@ -1,7 +1,7 @@
 package com.tagup.backend.security;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
@@ -79,8 +79,8 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         try {
             String[] parts = token.split("\\.");
             byte[] payloadBytes = Base64.getUrlDecoder().decode(padBase64(parts[1]));
-            JsonNode payload = new ObjectMapper().readTree(payloadBytes);
-            return payload.path("user_id").asText(payload.path("sub").asText(null));
+            JsonNode payload = JsonMapper.builder().build().readTree(payloadBytes);
+            return payload.path("user_id").asString(payload.path("sub").asString(null));
         } catch (Exception e) {
             log.debug("[Firebase] JWT payload 파싱 실패: {}", e.getMessage());
             return null;

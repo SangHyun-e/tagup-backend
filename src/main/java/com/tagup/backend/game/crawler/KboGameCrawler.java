@@ -1,7 +1,7 @@
 package com.tagup.backend.game.crawler;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
 import com.tagup.backend.game.entity.GameStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,7 +35,7 @@ public class KboGameCrawler {
     private static final DateTimeFormatter DATE_PARSER = DateTimeFormatter.ofPattern("MM.dd");
 
     private final RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
 
     /** 특정 날짜 경기만 반환 (실시간 결과 업데이트용) */
     public List<CrawledGame> crawlByDate(LocalDate date) {
@@ -85,7 +85,7 @@ public class KboGameCrawler {
     }
 
     private List<CrawledGame> parseGames(String json, int year) throws Exception {
-        JsonNode rows = objectMapper.readTree(json).get("rows");
+        JsonNode rows = jsonMapper.readTree(json).get("rows");
 
         List<CrawledGame> result = new ArrayList<>();
         LocalDate currentDate = null;
@@ -95,20 +95,20 @@ public class KboGameCrawler {
             if (cells == null || cells.isEmpty()) continue;
 
             int offset = 0;
-            if ("day".equals(cells.get(0).path("Class").asText(""))) {
-                String dateText = stripTags(cells.get(0).path("Text").asText(""));
+            if ("day".equals(cells.get(0).path("Class").asString(""))) {
+                String dateText = stripTags(cells.get(0).path("Text").asString(""));
                 currentDate = parseDate(dateText, year);
                 offset = 1;
             }
 
             if (currentDate == null) continue;
 
-            String timeText    = stripTags(cells.path(offset).path("Text").asText(""));
-            String playText    = stripTags(cells.path(offset + 1).path("Text").asText(""));
-            String relayText   = stripTags(cells.path(offset + 2).path("Text").asText(""));
-            String stadiumText = stripTags(cells.path(offset + 6).path("Text").asText(""));
+            String timeText    = stripTags(cells.path(offset).path("Text").asString(""));
+            String playText    = stripTags(cells.path(offset + 1).path("Text").asString(""));
+            String relayText   = stripTags(cells.path(offset + 2).path("Text").asString(""));
+            String stadiumText = stripTags(cells.path(offset + 6).path("Text").asString(""));
             // 비고 칸(마지막 셀): 정상 '-', 취소 시 '우천취소'/'그라운드사정' 등 사유 표시
-            String noteText    = stripTags(cells.path(cells.size() - 1).path("Text").asText(""));
+            String noteText    = stripTags(cells.path(cells.size() - 1).path("Text").asString(""));
 
             CrawledGame game = buildGame(currentDate, timeText, playText, relayText, noteText, stadiumText);
             if (game != null) result.add(game);
