@@ -40,3 +40,6 @@ src/main/resources/application-local.yml
 ### Logs ###
 *.log
 logs/
+
+### Local tunnel (H2 파일 DB) ###
+data/
