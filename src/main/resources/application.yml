@@ -114,6 +114,11 @@ firebase:
 tagup:
   security:
     require-firebase: true
+  live:
+    # 라이브 폴러 — 외부 사이트를 짧은 주기로 호출하므로 명시적으로 켤 때만 동작한다
+    enabled: true
+    # 15초. 60초로 관측했을 때 70~80타석 중 62개만 잡혔다(약 80%)
+    poll-interval-ms: 15000
 
 springdoc:
   api-docs:
