@@ -219,11 +219,11 @@ class ApiContractTest {
         void roomResponseShape() {
             JsonNode json = toJson(new RoomResponse(
                     1L, "TAG1A3", "b8905ced-aff3-41e9-88fd-1a614bf7c1da",
-                    "우리 더그아웃", "철수", true, LocalDateTime.of(2026, 8, 26, 12, 0)));
+                    "우리 더그아웃", "철수", true, null, LocalDateTime.of(2026, 8, 26, 12, 0)));
 
             assertThat(keysOf(json)).containsExactlyInAnyOrder(
                     "id", "tagCode", "chatKey", "name",
-                    "createdByNickname", "chatEnabled", "createdAt");
+                    "createdByNickname", "chatEnabled", "watchingGame", "createdAt");
         }
 
         @Test

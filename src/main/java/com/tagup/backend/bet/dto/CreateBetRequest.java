@@ -5,7 +5,10 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 public record CreateBetRequest(
-        @NotNull(message = "경기 ID를 입력해주세요.")
+        /**
+         * 배팅할 경기. <b>생략 가능</b> — 비우면 더그아웃이 오늘 보고 있는 경기를 쓴다.
+         * 방의 관전 경기도 없으면 거절된다.
+         */
         Long gameId,
 
         @NotBlank(message = "내기 내용을 입력해주세요.")
