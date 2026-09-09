@@ -43,8 +43,7 @@ public class BetService {
 
         validateRoomMember(room, proposer);
 
-        Game game = gameRepository.findById(request.gameId())
-                .orElseThrow(() -> new CustomException(ErrorCode.GAME_NOT_FOUND));
+        Game game = resolveGame(request, room);
 
         if (game.getStatus() != GameStatus.SCHEDULED) {
             throw new CustomException(ErrorCode.GAME_ALREADY_STARTED);
@@ -167,6 +166,24 @@ public class BetService {
         }
 
         log.info("[정산] 경기 {} 내기 정산 {}건, 미수락 만료 {}건", game.getKboGameId(), settled, cancelled);
+    }
+
+    /**
+     * 배팅 대상 경기를 정한다.
+     *
+     * <p>{@code gameId}를 주면 그 경기, 생략하면 <b>더그아웃이 오늘 보고 있는 경기</b>를 쓴다.
+     * 방마다 관전 경기가 정해져 있으므로 매번 경기를 고를 필요가 없다.
+     * 둘 다 없으면 무엇에 거는지 알 수 없으므로 거절한다.
+     */
+    private Game resolveGame(CreateBetRequest request, Room room) {
+        if (request.gameId() != null) {
+            return gameRepository.findById(request.gameId())
+                    .orElseThrow(() -> new CustomException(ErrorCode.GAME_NOT_FOUND));
+        }
+        if (room.getWatchingGame() == null) {
+            throw new CustomException(ErrorCode.NO_WATCHING_GAME);
+        }
+        return room.getWatchingGame();
     }
 
     /** 정산 결과를 양측에 푸시 (승자 관점 문구) */
