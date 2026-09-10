@@ -209,6 +209,60 @@ class BetSettlementTest {
                 eq("배팅 정산 완료"), any(), any());
     }
 
+    // ----------------------------------------- 알림 실패가 정산을 되돌리면 안 된다
+
+    /**
+     * 2026-09-09 실경기 회귀.
+     *
+     * <p>푸시 문구를 만들다 {@code LazyInitializationException}이 났고, 그게 트랜잭션 밖으로
+     * 나가면서 <b>이미 확정된 정산이 통째로 롤백됐다.</b> 그날 배팅은 하나도 정산되지 않았다.
+     * 승패는 경기 결과로 이미 결정된 사실이므로, 알림이 실패했다고 취소되면 안 된다.
+     */
+    @Test
+    void 푸시_발송이_실패해도_정산은_확정된다() {
+        Bet bet = acceptedBet(HOME_TEAM_ID);
+        Game game = finishedGame(5, 3);
+        given(game, bet);
+        doThrow(new RuntimeException("Could not initialize proxy - no session"))
+                .when(pushSender).sendToUsers(anyList(), any(), any(), any());
+
+        betService.settleByGame(game);
+
+        assertThat(bet.getStatus()).isEqualTo(BetStatus.FINISHED);
+        assertThat(bet.getProposerResult()).isEqualTo(BetResult.WIN);
+    }
+
+    @Test
+    void 채팅_공지가_실패해도_정산은_확정되고_푸시는_계속_시도한다() {
+        Bet bet = acceptedBet(HOME_TEAM_ID);
+        Game game = finishedGame(2, 7);
+        given(game, bet);
+        doThrow(new RuntimeException("firestore unavailable"))
+                .when(betChatAnnouncer).announceSettlement(any(), any());
+
+        betService.settleByGame(game);
+
+        assertThat(bet.getStatus()).isEqualTo(BetStatus.FINISHED);
+        assertThat(bet.getProposerResult()).isEqualTo(BetResult.LOSE);
+        verify(pushSender).sendToUsers(anyList(), any(), any(), any());
+    }
+
+    @Test
+    void 한_배팅의_알림_실패가_다른_배팅의_정산을_막지_않는다() {
+        Bet first = acceptedBet(HOME_TEAM_ID);
+        Bet second = acceptedBet(AWAY_TEAM_ID);
+        Game game = finishedGame(5, 3);
+        given(game, first, second);
+        doThrow(new RuntimeException("boom"))
+                .when(pushSender).sendToUsers(anyList(), any(), any(), any());
+
+        betService.settleByGame(game);
+
+        assertThat(first.getStatus()).isEqualTo(BetStatus.FINISHED);
+        assertThat(second.getStatus()).isEqualTo(BetStatus.FINISHED);
+        assertThat(second.getProposerResult()).isEqualTo(BetResult.LOSE);
+    }
+
     // ------------------------------------------------------------------ 헬퍼
 
     private void given(Game game, Bet... bets) {

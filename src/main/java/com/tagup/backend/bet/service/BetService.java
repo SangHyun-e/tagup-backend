@@ -160,9 +160,8 @@ public class BetService {
                 continue;
             }
             bet.settle(calcResult(bet.getBetOnTeamId(), homeTeamId, homeScore, awayScore));
-            betChatAnnouncer.announceSettlement(bet, game);
-            notifySettlement(bet, game, awayScore, homeScore);
             settled++;
+            announceQuietly(bet, game, awayScore, homeScore);
         }
 
         log.info("[정산] 경기 {} 내기 정산 {}건, 미수락 만료 {}건", game.getKboGameId(), settled, cancelled);
@@ -184,6 +183,29 @@ public class BetService {
             throw new CustomException(ErrorCode.NO_WATCHING_GAME);
         }
         return room.getWatchingGame();
+    }
+
+    /**
+     * 정산 결과를 알린다. <b>실패해도 정산은 되돌리지 않는다.</b>
+     *
+     * <p>2026-09-09 실경기에서 푸시 문구를 만들다 {@code LazyInitializationException}이 터졌고,
+     * 그게 트랜잭션 밖으로 나가면서 <b>이미 확정된 정산이 통째로 롤백됐다.</b> 그날 배팅은
+     * 하나도 정산되지 않았다.
+     *
+     * <p>승패는 경기 결과로 이미 결정된 사실이다. 알림이 안 갔다고 그 사실을 취소할 이유가 없다.
+     * 알림 실패는 로그로 남기고 정산은 확정한다.
+     */
+    private void announceQuietly(Bet bet, Game game, int awayScore, int homeScore) {
+        try {
+            betChatAnnouncer.announceSettlement(bet, game);
+        } catch (Exception e) {
+            log.warn("[정산] 채팅 공지 실패 betId={} (정산은 유지): {}", bet.getId(), e.toString());
+        }
+        try {
+            notifySettlement(bet, game, awayScore, homeScore);
+        } catch (Exception e) {
+            log.warn("[정산] 푸시 발송 실패 betId={} (정산은 유지): {}", bet.getId(), e.toString());
+        }
     }
 
     /** 정산 결과를 양측에 푸시 (승자 관점 문구) */
