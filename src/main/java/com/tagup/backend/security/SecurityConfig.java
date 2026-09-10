@@ -19,7 +19,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
 
     @Bean
@@ -34,16 +33,21 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/teams").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/games/**").permitAll()
+                        .requestMatchers("/api/v1/admin/**").permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/h2-console/**"
+                                "/h2-console/**",
+                                "/actuator/health"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                .headers(headers -> headers.frameOptions(f -> f.sameOrigin())) // H2 console
-                .addFilterBefore(new JwtFilter(jwtUtil, userRepository), UsernamePasswordAuthenticationFilter.class)
+                .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
+                .addFilterBefore(new FirebaseTokenFilter(userRepository),
+                        UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }

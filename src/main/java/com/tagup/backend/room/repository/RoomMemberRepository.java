@@ -14,4 +14,7 @@ public interface RoomMemberRepository extends JpaRepository<RoomMember, Long> {
 
     @Query("SELECT rm FROM RoomMember rm JOIN FETCH rm.room WHERE rm.user = :user")
     List<RoomMember> findAllByUserWithRoom(@Param("user") User user);
+
+    @Query("SELECT rm FROM RoomMember rm JOIN FETCH rm.user u LEFT JOIN FETCH u.favoriteTeam WHERE rm.room = :room ORDER BY rm.joinedAt ASC")
+    List<RoomMember> findAllByRoomWithUser(@Param("room") Room room);
 }

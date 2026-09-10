@@ -1,11 +1,15 @@
 package com.tagup.backend.team.entity;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Table(name = "teams")
 @Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Team {
 
     @Id
@@ -19,4 +23,11 @@ public class Team {
     private String shortName;
 
     private String logoUrl;
+
+    @Builder
+    public Team(String name, String shortName, String logoUrl) {
+        this.name = name;
+        this.shortName = shortName;
+        this.logoUrl = logoUrl;
+    }
 }
