@@ -70,6 +70,25 @@ class AtBatDetectorTest {
         return events;
     }
 
+    /** 실서비스 폴러와 같은 방식 — 타석이 시작된 스냅샷을 기준으로 삼는다 */
+    private List<AtBatEvent> replayFromAtBatStart(List<LiveGameSnapshot> snaps) {
+        List<AtBatEvent> events = new ArrayList<>();
+        LiveGameSnapshot start = null;
+        for (int i = 1; i < snaps.size(); i++) {
+            LiveGameSnapshot prev = snaps.get(i - 1), cur = snaps.get(i);
+            if (start == null) start = prev;
+            detector.detect(start, prev, cur).ifPresent(events::add);
+            if (!java.util.Objects.equals(prev.batter(), cur.batter()) || !cur.isLive()) {
+                start = cur;
+            }
+        }
+        return events;
+    }
+
+    private long unknowns(List<AtBatEvent> events) {
+        return events.stream().filter(e -> !e.settleable()).count();
+    }
+
     // ------------------------------------------------------------------
     @Test
     @DisplayName("실경기 리플레이: 타석이 감지되고 대부분 정산 가능한 결과가 나온다")
@@ -177,6 +196,66 @@ class AtBatDetectorTest {
                 LiveGameState.IN_PROGRESS, 2, HalfInning.TOP, 0, 0, 2, 1, 1,
                 "타자A", "투수A", null, null, null);  // 볼카운트만 변함
         assertThat(detector.detect(s1, s2)).isEmpty();
+    }
+
+    // ---------------------------------------- 기준 스냅샷 (2026-09-13 개선)
+
+    /**
+     * KBO는 타격 결과를 먼저 갱신하고, <b>타자 이름은 다음 타자가 들어설 때</b> 바뀐다.
+     * 그래서 타자가 바뀌는 순간 직전 스냅샷과 비교하면 변화가 이미 끝나 있어 0으로 보인다.
+     */
+    @Test
+    @DisplayName("점수가 타자 이름보다 먼저 갱신돼도 SAFE로 잡는다")
+    void scoreUpdatesBeforeBatterName() {
+        LiveGameSnapshot atBatStart = full(1, HalfInning.TOP, 0, 0, 0, "박해민", "잭로그");
+        LiveGameSnapshot scored    = full(1, HalfInning.TOP, 0, 2, 0, "박해민", "잭로그"); // 2점 홈런, 타자 그대로
+        LiveGameSnapshot nextBatter = full(1, HalfInning.TOP, 0, 2, 0, "오스틴", "잭로그");
+
+        assertThat(detector.detect(atBatStart, scored, nextBatter))
+                .get()
+                .extracting(AtBatEvent::result, AtBatEvent::runsScored)
+                .containsExactly(AtBatResult.SAFE, 2);
+
+        // 직전 스냅샷만 보면 아무 변화가 없어 판정 불가가 된다 — 개선 전의 동작
+        assertThat(detector.detect(scored, nextBatter))
+                .get()
+                .extracting(AtBatEvent::result)
+                .isEqualTo(AtBatResult.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("아웃카운트가 타자 이름보다 먼저 갱신돼도 OUT으로 잡는다")
+    void outUpdatesBeforeBatterName() {
+        LiveGameSnapshot atBatStart = full(3, HalfInning.BOTTOM, 0, 0, 0, "잭로그", "박찬호");
+        LiveGameSnapshot got1Out   = full(3, HalfInning.BOTTOM, 1, 0, 0, "잭로그", "박찬호");
+        LiveGameSnapshot nextBatter = full(3, HalfInning.BOTTOM, 1, 0, 0, "잭로그", "양의지");
+
+        assertThat(detector.detect(atBatStart, got1Out, nextBatter))
+                .get().extracting(AtBatEvent::result).isEqualTo(AtBatResult.OUT);
+
+        assertThat(detector.detect(got1Out, nextBatter))
+                .get().extracting(AtBatEvent::result).isEqualTo(AtBatResult.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("실경기 리플레이: 타석 시작 기준이 직전 기준보다 판정 불가가 적다")
+    void atBatStartBaselineReducesUnknowns() {
+        List<LiveGameSnapshot> snaps = loadFixture();
+
+        List<AtBatEvent> byPrev  = replay(snaps);
+        List<AtBatEvent> byStart = replayFromAtBatStart(snaps);
+
+        assertThat(byStart).hasSameSizeAs(byPrev);   // 감지하는 타석 수는 같아야 한다
+        assertThat(unknowns(byStart))
+                .as("2026-09-01 5경기 349타석 리플레이에서 UNKNOWN 14건 → 6건")
+                .isLessThan(unknowns(byPrev));
+    }
+
+    private static LiveGameSnapshot full(int inning, HalfInning half, int out,
+                                         int awayScore, int homeScore,
+                                         String awayPlayer, String homePlayer) {
+        return new LiveGameSnapshot(LiveGameState.IN_PROGRESS, inning, half,
+                awayScore, homeScore, 0, 0, out, awayPlayer, homePlayer, null, null, null);
     }
 
     private static LiveGameSnapshot snapshot(int inning, HalfInning half, int out,
