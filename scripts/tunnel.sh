@@ -19,7 +19,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(dirname "$SCRIPT_DIR")"
 FRONTEND_ENV="$(dirname "$BACKEND_DIR")/tagup-frontend/.env.local"
 LOG_DIR="$BACKEND_DIR/logs"
+# 서버 로그는 이어 쓴다(>>). 덮어쓰면 재시작 한 번에 지난 경기 기록이 통째로 사라진다 —
+# 2026-09-09 실경기 로그(타석 311건)를 그렇게 잃었다.
 SERVER_LOG="$LOG_DIR/tunnel-server.log"
+# 터널 로그는 매 실행마다 비운다. 발급 주소를 여기서 읽어내는데, 남겨두면 옛 주소를 집어간다.
 TUNNEL_LOG="$LOG_DIR/tunnel-cloudflared.log"
 PORT=8080
 
@@ -75,8 +78,9 @@ fi
 # ---------------------------------------------------------------- 서버 기동
 echo "▸ 서버 기동 중 (프로파일: local-tunnel)..."
 cd "$BACKEND_DIR"
+printf '\n===== 기동 %s =====\n' "$(date '+%Y-%m-%d %H:%M:%S')" >> "$SERVER_LOG"
 ./gradlew bootRun --args='--spring.profiles.active=local-tunnel' \
-  > "$SERVER_LOG" 2>&1 &
+  >> "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 
 for i in $(seq 1 120); do
