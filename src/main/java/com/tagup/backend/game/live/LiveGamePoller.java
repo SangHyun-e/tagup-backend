@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -39,6 +40,15 @@ public class LiveGamePoller {
     /** kboGameId → 직전 스냅샷 */
     private final Map<String, LiveGameSnapshot> lastSnapshots = new ConcurrentHashMap<>();
 
+    /**
+     * kboGameId → <b>현재 타석이 시작된 시점</b>의 스냅샷.
+     *
+     * <p>결과 역산의 기준이다. 직전 스냅샷과 비교하면 안 된다 — KBO는 타격 결과를 먼저
+     * 갱신하고 타자 이름은 다음 타자가 들어설 때 바뀌므로, 타자가 바뀌는 순간에는 변화가
+     * 이미 끝나 있어 0으로 보인다. (9/1 리플레이: UNKNOWN 14건 → 6건)
+     */
+    private final Map<String, LiveGameSnapshot> atBatStarts = new ConcurrentHashMap<>();
+
     /** 그날 첫 수집에만 요약을 남긴다 — 폴러가 살아 있고 응답이 파싱된다는 증거 */
     private LocalDate loggedFor;
 
@@ -54,6 +64,7 @@ public class LiveGamePoller {
                 today, List.of(GameStatus.SCHEDULED, GameStatus.IN_PROGRESS));
         if (watchable.isEmpty()) {
             lastSnapshots.clear();
+            atBatStarts.clear();
             return;
         }
 
@@ -71,14 +82,22 @@ public class LiveGamePoller {
 
             LiveGameSnapshot prev = lastSnapshots.put(game.getKboGameId(), cur);
             if (prev == null) {
+                atBatStarts.put(game.getKboGameId(), cur);
                 if (cur.isLive()) logStart(game.getKboGameId(), cur);
                 continue;
             }
 
             logStateTransition(game.getKboGameId(), prev, cur);
 
-            detector.detect(prev, cur)
+            LiveGameSnapshot start = atBatStarts.getOrDefault(game.getKboGameId(), prev);
+            detector.detect(start, prev, cur)
                     .ifPresent(event -> logAtBat(game.getKboGameId(), event, cur));
+
+            // 타자가 바뀌었으면 다음 타석의 기준을 새로 잡는다.
+            // (경기가 진행 중이 아니게 된 경우도 기준을 버린다 — 이어서 비교하면 어긋난다)
+            if (!Objects.equals(prev.batter(), cur.batter()) || !cur.isLive()) {
+                atBatStarts.put(game.getKboGameId(), cur);
+            }
         }
     }
 
