@@ -104,6 +104,9 @@ public class LiveGamePoller {
             // (경기가 진행 중이 아니게 된 경우도 기준을 버린다 — 이어서 비교하면 어긋난다)
             if (!Objects.equals(prev.batter(), cur.batter()) || !cur.isLive()) {
                 startNewAtBat(game.getKboGameId(), cur);
+                if (cur.isLive() && cur.batter() != null && !cur.batter().isBlank()) {
+                    publishAtBatStarted(game, prev, cur);
+                }
             }
         }
     }
@@ -117,6 +120,19 @@ public class LiveGamePoller {
     private void startNewAtBat(String kboGameId, LiveGameSnapshot cur) {
         atBatStarts.put(kboGameId, cur);
         currentAtBats.update(kboGameId, cur, Instant.now());
+    }
+
+    /** 새 타석 시작을 알린다 (중계 문구 · 배팅 창의 기준점) */
+    private void publishAtBatStarted(Game game, LiveGameSnapshot prev, LiveGameSnapshot cur) {
+        try {
+            eventPublisher.publishEvent(new AtBatStartedEvent(
+                    game.getId(), game.getKboGameId(),
+                    cur.inning(), cur.half(), cur.batter(), cur.pitcher(),
+                    !Objects.equals(prev.pitcher(), cur.pitcher())));
+        } catch (Exception e) {
+            log.warn("[타석] 시작 이벤트 발행 실패 {} {}: {}",
+                    game.getKboGameId(), cur.batter(), e.toString());
+        }
     }
 
     /**

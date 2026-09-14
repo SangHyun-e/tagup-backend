@@ -20,4 +20,8 @@ public interface RoomRepository extends JpaRepository<Room, Long> {
 
     // 채팅이 활성화된 더그아웃 전체 조회
     List<Room> findByChatEnabled(boolean chatEnabled);
+
+    /** 이 경기를 같이 보고 있는 더그아웃들 (라이브 중계 발송 대상) */
+    @Query("SELECT r FROM Room r WHERE r.watchingGame.id = :gameId")
+    List<Room> findByWatchingGameId(@Param("gameId") Long gameId);
 }
