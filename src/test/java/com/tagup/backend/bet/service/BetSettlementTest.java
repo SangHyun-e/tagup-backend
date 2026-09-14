@@ -8,6 +8,7 @@ import com.tagup.backend.game.live.AtBatResult;
 import com.tagup.backend.game.live.HalfInning;
 import com.tagup.backend.game.entity.Game;
 import com.tagup.backend.game.entity.GameStatus;
+import com.tagup.backend.game.live.CurrentAtBatRegistry;
 import com.tagup.backend.game.repository.GameRepository;
 import com.tagup.backend.notification.service.PushSender;
 import com.tagup.backend.room.entity.Room;
@@ -65,7 +66,8 @@ class BetSettlementTest {
                 pushSender,
                 mock(RoomRepository.class),
                 mock(RoomMemberRepository.class),
-                mock(GameRepository.class));
+                mock(GameRepository.class),
+                mock(CurrentAtBatRegistry.class));
 
         homeTeam = withId(Team.builder().name("두산 베어스").shortName("두산").build(), HOME_TEAM_ID);
         awayTeam = withId(Team.builder().name("SSG 랜더스").shortName("SSG").build(), AWAY_TEAM_ID);

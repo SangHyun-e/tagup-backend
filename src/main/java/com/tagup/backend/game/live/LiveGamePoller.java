@@ -11,6 +11,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,7 @@ public class LiveGamePoller {
     private final KboLiveClient liveClient;
     private final GameRepository gameRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final CurrentAtBatRegistry currentAtBats;
     private final AtBatDetector detector = new AtBatDetector();
 
     /** kboGameId → 직전 스냅샷 */
@@ -67,6 +69,7 @@ public class LiveGamePoller {
         if (watchable.isEmpty()) {
             lastSnapshots.clear();
             atBatStarts.clear();
+            currentAtBats.clear();
             return;
         }
 
@@ -84,7 +87,7 @@ public class LiveGamePoller {
 
             LiveGameSnapshot prev = lastSnapshots.put(game.getKboGameId(), cur);
             if (prev == null) {
-                atBatStarts.put(game.getKboGameId(), cur);
+                startNewAtBat(game.getKboGameId(), cur);
                 if (cur.isLive()) logStart(game.getKboGameId(), cur);
                 continue;
             }
@@ -100,9 +103,20 @@ public class LiveGamePoller {
             // 타자가 바뀌었으면 다음 타석의 기준을 새로 잡는다.
             // (경기가 진행 중이 아니게 된 경우도 기준을 버린다 — 이어서 비교하면 어긋난다)
             if (!Objects.equals(prev.batter(), cur.batter()) || !cur.isLive()) {
-                atBatStarts.put(game.getKboGameId(), cur);
+                startNewAtBat(game.getKboGameId(), cur);
             }
         }
+    }
+
+    /**
+     * 새 타석의 기준 스냅샷을 잡고, 배팅 창을 연다.
+     *
+     * <p>배팅 창의 시작점은 <b>실제 타석 시작이 아니라 감지 시각</b>이다. 폴링 간격만큼
+     * 이미 늦어 있는데 거기서 또 소급하면 창이 실제보다 짧아진다.
+     */
+    private void startNewAtBat(String kboGameId, LiveGameSnapshot cur) {
+        atBatStarts.put(kboGameId, cur);
+        currentAtBats.update(kboGameId, cur, Instant.now());
     }
 
     /**

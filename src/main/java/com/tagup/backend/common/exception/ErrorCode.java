@@ -36,6 +36,10 @@ public enum ErrorCode {
     INVALID_BET_TEAM(HttpStatus.BAD_REQUEST, "해당 경기에 참여하지 않는 팀입니다."),
     CANNOT_BET_SELF(HttpStatus.BAD_REQUEST, "자신이 건 배팅에는 콜할 수 없습니다."),
     NO_WATCHING_GAME(HttpStatus.BAD_REQUEST, "경기를 지정하거나 더그아웃의 관전 경기를 먼저 설정해주세요."),
+    GAME_NOT_LIVE(HttpStatus.BAD_REQUEST, "진행 중인 경기에서만 타석 배팅을 걸 수 있습니다."),
+    NO_LIVE_AT_BAT(HttpStatus.BAD_REQUEST, "지금 진행 중인 타석이 없습니다."),
+    AT_BAT_BETTING_CLOSED(HttpStatus.BAD_REQUEST, "이 타석은 배팅이 마감됐습니다. 다음 타석을 기다려주세요."),
+    INVALID_AT_BAT_RESULT(HttpStatus.BAD_REQUEST, "아웃 또는 세이프만 선택할 수 있습니다."),
 
     // Common
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다.");

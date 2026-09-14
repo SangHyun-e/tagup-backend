@@ -119,6 +119,10 @@ tagup:
     enabled: true
     # 15초. 60초로 관측했을 때 70~80타석 중 62개만 잡혔다(약 80%)
     poll-interval-ms: 15000
+  bet:
+    # 타석 배팅을 받는 시간. 타석 평균은 약 2분이라 시간이 부족해서가 아니라,
+    # 폴링 간격만큼 '결과는 났는데 서버는 모르는' 구간이 생기기 때문에 초반으로 제한한다
+    at-bat-window-seconds: 30
 
 springdoc:
   api-docs:

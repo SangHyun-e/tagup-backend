@@ -7,6 +7,7 @@ import com.tagup.backend.common.exception.CustomException;
 import com.tagup.backend.common.exception.ErrorCode;
 import com.tagup.backend.game.entity.Game;
 import com.tagup.backend.game.entity.GameStatus;
+import com.tagup.backend.game.live.CurrentAtBatRegistry;
 import com.tagup.backend.game.repository.GameRepository;
 import com.tagup.backend.notification.service.PushSender;
 import com.tagup.backend.room.entity.Room;
@@ -57,7 +58,8 @@ class BetGameResolutionTest {
         gameRepository = mock(GameRepository.class);
 
         betService = new BetService(betRepository, mock(BetChatAnnouncer.class),
-                mock(PushSender.class), roomRepository, roomMemberRepository, gameRepository);
+                mock(PushSender.class), roomRepository, roomMemberRepository, gameRepository,
+                mock(CurrentAtBatRegistry.class));
 
         lg = team(3L, "LG");
         doosan = team(4L, "두산");
