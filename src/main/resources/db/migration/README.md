@@ -2,6 +2,35 @@
 
 **Flyway/Liquibase 미도입 → 수동 적용.** 마이그레이션 도구 도입 전까지 이 규칙을 지킨다.
 
+## ⚠ `ddl-auto: update` 를 믿지 말 것 (2026-09-14 실제 사고)
+
+`local` / `local-tunnel` 은 `ddl-auto: update` 라 스키마가 알아서 따라온다고 착각하기 쉽다.
+**행이 들어있는 테이블에 `NOT NULL` 컬럼을 추가하는 건 실패한다.** 그런데 Hibernate 는
+예외를 던지지 않고 WARN 만 남기고 넘어가므로, 서버는 정상 기동한 것처럼 보이고
+그 컬럼을 읽는 API 만 500 이 된다.
+
+```
+WARN  GenerationTarget encountered exception accepting command :
+      Error executing DDL "alter table if exists bets add column type enum (...) not null"
+      via JDBC [NULL not allowed for column "TYPE";]
+...
+ERROR Column "B1_0.TYPE" not found
+```
+
+V4(`type VARCHAR(20) NOT NULL DEFAULT 'WIN_LOSE'`)에는 DEFAULT 가 있어 prod 는 멀쩡한데,
+로컬 H2 는 Hibernate 가 DEFAULT 없이 만들려다 실패한 것이다.
+
+**대처** — 로컬에서 NOT NULL 컬럼이 추가되는 마이그레이션을 만들면 둘 중 하나를 한다.
+1. `rm -rf data/` 로 DB 를 비우고 새로 만든다 (테스트 데이터가 아깝지 않을 때)
+2. 해당 DDL 을 H2 에 직접 적용한다
+   ```bash
+   java -cp <h2.jar> org.h2.tools.Shell \
+     -url "jdbc:h2:file:$(pwd)/data/tagupdb;MODE=MySQL;AUTO_SERVER=TRUE" -user sa -password "" \
+     -sql "ALTER TABLE bets ADD COLUMN IF NOT EXISTS type VARCHAR(20) DEFAULT 'WIN_LOSE' NOT NULL;"
+   ```
+
+기동 로그에서 `GenerationTarget encountered exception` 을 grep 하면 이런 실패를 미리 잡을 수 있다.
+
 ## ⚠ 가장 중요한 사실
 
 prod는 `ddl-auto: validate` 다. **Hibernate가 테이블을 만들어주지 않고, 엔티티와 스키마가
@@ -13,6 +42,9 @@ prod는 `ddl-auto: validate` 다. **Hibernate가 테이블을 만들어주지 �
 | 파일 | 내용 |
 |---|---|
 | `V1__initial_schema.sql` | 최초 배포용 전체 스키마 (2026-08-26 기준: users·teams·rooms·room_members·games·bets) |
+| `V2__add_user_devices.sql` | 푸시 알림 기기 등록 |
+| `V3__add_room_watching_game.sql` | 더그아웃의 '오늘 보는 경기' |
+| `V4__add_at_bat_bet.sql` | 타석 배팅 (`type`, `at_bat_*`, `bet_on_team_id` NULL 허용) |
 
 ## 적용 방법
 
