@@ -3,6 +3,7 @@ package com.tagup.backend.game.live;
 import com.tagup.backend.game.entity.Game;
 import com.tagup.backend.game.entity.GameStatus;
 import com.tagup.backend.game.repository.GameRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,6 +36,7 @@ public class LiveGamePoller {
 
     private final KboLiveClient liveClient;
     private final GameRepository gameRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final AtBatDetector detector = new AtBatDetector();
 
     /** kboGameId → 직전 스냅샷 */
@@ -90,14 +92,30 @@ public class LiveGamePoller {
             logStateTransition(game.getKboGameId(), prev, cur);
 
             LiveGameSnapshot start = atBatStarts.getOrDefault(game.getKboGameId(), prev);
-            detector.detect(start, prev, cur)
-                    .ifPresent(event -> logAtBat(game.getKboGameId(), event, cur));
+            detector.detect(start, prev, cur).ifPresent(event -> {
+                logAtBat(game.getKboGameId(), event, cur);
+                publish(game, event);
+            });
 
             // 타자가 바뀌었으면 다음 타석의 기준을 새로 잡는다.
             // (경기가 진행 중이 아니게 된 경우도 기준을 버린다 — 이어서 비교하면 어긋난다)
             if (!Objects.equals(prev.batter(), cur.batter()) || !cur.isLive()) {
                 atBatStarts.put(game.getKboGameId(), cur);
             }
+        }
+    }
+
+    /**
+     * 타석 종료를 알린다. <b>구독자 쪽 실패가 폴링을 멈추면 안 된다.</b>
+     * 한 경기의 정산 오류로 나머지 경기 감지까지 죽는 것이 더 나쁘다.
+     */
+    private void publish(Game game, AtBatEvent event) {
+        try {
+            eventPublisher.publishEvent(
+                    new AtBatDetectedEvent(game.getId(), game.getKboGameId(), event));
+        } catch (Exception e) {
+            log.warn("[타석] 이벤트 발행 실패 {} {}: {}",
+                    game.getKboGameId(), event.batter(), e.toString());
         }
     }
 

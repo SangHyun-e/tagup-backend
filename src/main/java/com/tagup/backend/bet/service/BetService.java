@@ -5,6 +5,7 @@ import com.tagup.backend.bet.dto.CreateBetRequest;
 import com.tagup.backend.bet.entity.Bet;
 import com.tagup.backend.bet.entity.BetResult;
 import com.tagup.backend.bet.entity.BetStatus;
+import com.tagup.backend.bet.entity.BetType;
 import com.tagup.backend.bet.repository.BetRepository;
 import com.tagup.backend.common.exception.CustomException;
 import com.tagup.backend.notification.service.PushSender;
@@ -148,10 +149,19 @@ public class BetService {
 
         int cancelled = 0;
         int settled = 0;
+        int unresolvedAtBats = 0;
         for (Bet bet : bets) {
             if (bet.getStatus() == BetStatus.PENDING) {
                 bet.cancel();
                 cancelled++;
+                continue;
+            }
+            // 타석 배팅은 그 타석이 끝나는 순간 AtBatBetSettler 가 정산한다.
+            // 여기까지 살아 있다는 건 그 타석을 끝내 감지하지 못했다는 뜻이므로
+            // (감지 실패·폴러 정지·경기 중단 등) 경기 스코어로 판정하지 않고 무효 처리한다.
+            if (bet.getType() == BetType.AT_BAT) {
+                bet.settle(BetResult.DRAW);
+                unresolvedAtBats++;
                 continue;
             }
             // 크롤링 결손으로 스코어가 없으면 결과 확정 불가 → 다음 정산 주기로 미룸
@@ -164,7 +174,9 @@ public class BetService {
             announceQuietly(bet, game, awayScore, homeScore);
         }
 
-        log.info("[정산] 경기 {} 내기 정산 {}건, 미수락 만료 {}건", game.getKboGameId(), settled, cancelled);
+        log.info("[정산] 경기 {} 내기 정산 {}건, 미수락 만료 {}건{}",
+                game.getKboGameId(), settled, cancelled,
+                unresolvedAtBats > 0 ? ", 타석 미감지 무효 " + unresolvedAtBats + "건" : "");
     }
 
     /**
