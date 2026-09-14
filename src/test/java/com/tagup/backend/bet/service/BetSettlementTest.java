@@ -4,6 +4,8 @@ import com.tagup.backend.bet.entity.Bet;
 import com.tagup.backend.bet.entity.BetResult;
 import com.tagup.backend.bet.entity.BetStatus;
 import com.tagup.backend.bet.repository.BetRepository;
+import com.tagup.backend.game.live.AtBatResult;
+import com.tagup.backend.game.live.HalfInning;
 import com.tagup.backend.game.entity.Game;
 import com.tagup.backend.game.entity.GameStatus;
 import com.tagup.backend.game.repository.GameRepository;
@@ -261,6 +263,33 @@ class BetSettlementTest {
         assertThat(first.getStatus()).isEqualTo(BetStatus.FINISHED);
         assertThat(second.getStatus()).isEqualTo(BetStatus.FINISHED);
         assertThat(second.getProposerResult()).isEqualTo(BetResult.LOSE);
+    }
+
+    // ------------------------------------- 타석 배팅은 스코어로 정산하지 않는다
+
+    /**
+     * 타석 배팅은 그 타석이 끝나는 순간 {@code AtBatBetSettler}가 정산한다.
+     * 경기 종료 정산까지 살아 있다는 건 그 타석을 끝내 감지하지 못했다는 뜻이므로
+     * (감지 실패·폴러 정지·경기 중단) 경기 스코어로 판정하면 안 된다.
+     */
+    @Test
+    void 감지되지_않은_타석_배팅은_경기_스코어가_아니라_무효로_끝난다() {
+        Game game = finishedGame(5, 3);
+        Bet winLose = acceptedBet(HOME_TEAM_ID);
+        Bet atBat = Bet.forAtBat(proposer, room, game, "커피 한 잔",
+                AtBatResult.OUT, 7, HalfInning.TOP, "손아섭");
+        atBat.accept(receiver);
+        given(game, winLose, atBat);
+
+        betService.settleByGame(game);
+
+        assertThat(winLose.getProposerResult())
+                .as("승패 배팅은 평소대로 스코어로 정산된다")
+                .isEqualTo(BetResult.WIN);
+        assertThat(atBat.getStatus()).isEqualTo(BetStatus.FINISHED);
+        assertThat(atBat.getProposerResult())
+                .as("타석을 감지하지 못했으므로 승패를 가릴 근거가 없다")
+                .isEqualTo(BetResult.DRAW);
     }
 
     // ------------------------------------------------------------------ 헬퍼

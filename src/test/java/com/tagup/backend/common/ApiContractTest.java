@@ -5,6 +5,8 @@ import tools.jackson.databind.json.JsonMapper;
 import com.tagup.backend.bet.dto.BetResponse;
 import com.tagup.backend.bet.entity.BetResult;
 import com.tagup.backend.bet.entity.BetStatus;
+import com.tagup.backend.bet.entity.BetType;
+import com.tagup.backend.game.live.AtBatResult;
 import com.tagup.backend.common.response.ApiResponse;
 import com.tagup.backend.game.dto.GameResponse;
 import com.tagup.backend.game.entity.GameStatus;
@@ -147,14 +149,42 @@ class ApiContractTest {
                                    BetStatus status, BetResult result) {
             return new BetResponse(
                     1L,
+                    BetType.WIN_LOSE,
                     new BetResponse.ProposerInfo(1L, "철수"),
                     receiver,
                     3L,
                     new BetResponse.TeamInfo(3L, "LG"),
+                    null,
                     "커피 한 잔",
                     status, result,
                     new BetResponse.GameSummary(1L, "LG", "NC", "2026-08-26"),
                     LocalDateTime.of(2026, 8, 26, 12, 0));
+        }
+
+        @Test
+        @DisplayName("타석 배팅은 betOnTeam 대신 atBat 을 채운다")
+        void atBatBetResponseShape() {
+            BetResponse atBat = new BetResponse(
+                    2L,
+                    BetType.AT_BAT,
+                    new BetResponse.ProposerInfo(1L, "철수"),
+                    new BetResponse.ReceiverInfo(2L, "영희"),
+                    null, null,
+                    new BetResponse.AtBatInfo(3, "말", "박찬호", AtBatResult.OUT),
+                    "커피 한 잔",
+                    BetStatus.ACCEPTED, null,
+                    new BetResponse.GameSummary(1L, "LG", "NC", "2026-09-14"),
+                    LocalDateTime.of(2026, 9, 14, 19, 0));
+
+            JsonNode json = toJson(atBat);
+
+            assertThat(json.get("type").asString()).isEqualTo("AT_BAT");
+            assertThat(keysOf(json.get("atBat")))
+                    .containsExactlyInAnyOrder("inning", "half", "batter", "betOnResult");
+            assertThat(json.get("atBat").get("betOnResult").asString()).isEqualTo("OUT");
+            assertThat(json.get("betOnTeam").isNull())
+                    .as("타석 배팅에는 응원 팀이 없다")
+                    .isTrue();
         }
 
         @Test
@@ -164,8 +194,8 @@ class ApiContractTest {
                     BetStatus.ACCEPTED, null));
 
             assertThat(keysOf(json)).containsExactlyInAnyOrder(
-                    "id", "proposer", "receiver", "betOnTeamId", "betOnTeam",
-                    "content", "status", "proposerResult", "game", "createdAt");
+                    "id", "type", "proposer", "receiver", "betOnTeamId", "betOnTeam",
+                    "atBat", "content", "status", "proposerResult", "game", "createdAt");
 
             assertThat(keysOf(json.get("proposer"))).containsExactlyInAnyOrder("id", "nickname");
             assertThat(keysOf(json.get("receiver"))).containsExactlyInAnyOrder("id", "nickname");
