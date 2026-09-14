@@ -1,6 +1,7 @@
 package com.tagup.backend.bet.service;
 
 import com.tagup.backend.bet.dto.BetResponse;
+import com.tagup.backend.bet.dto.CreateAtBatBetRequest;
 import com.tagup.backend.bet.dto.CreateBetRequest;
 import com.tagup.backend.bet.entity.Bet;
 import com.tagup.backend.bet.entity.BetResult;
@@ -11,17 +12,24 @@ import com.tagup.backend.common.exception.CustomException;
 import com.tagup.backend.notification.service.PushSender;
 import com.tagup.backend.common.exception.ErrorCode;
 import com.tagup.backend.game.entity.Game;
+import com.tagup.backend.game.live.AtBatResult;
+import com.tagup.backend.game.live.CurrentAtBat;
+import com.tagup.backend.game.live.CurrentAtBatRegistry;
 import com.tagup.backend.game.entity.GameStatus;
 import com.tagup.backend.game.repository.GameRepository;
+import com.tagup.backend.room.entity.RoomMember;
 import com.tagup.backend.room.entity.Room;
 import com.tagup.backend.room.repository.RoomMemberRepository;
 import com.tagup.backend.room.repository.RoomRepository;
 import com.tagup.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +44,14 @@ public class BetService {
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final GameRepository gameRepository;
+    private final CurrentAtBatRegistry currentAtBats;
+
+    /**
+     * 타석 배팅을 받는 시간. 짧게 두는 이유는 시간이 부족해서가 아니라 <b>정보 비대칭</b> 때문이다 —
+     * 폴링 간격만큼 결과가 이미 나왔는데 서버가 모르는 구간이 생긴다. 타석 평균은 약 2분이다.
+     */
+    @Value("${tagup.bet.at-bat-window-seconds:30}")
+    private long atBatWindowSeconds;
 
     @Transactional
     public BetResponse createBet(Long roomId, CreateBetRequest request, User proposer) {
@@ -79,6 +95,59 @@ public class BetService {
                         "betId", String.valueOf(saved.getId())));
 
         return BetResponse.from(saved);
+    }
+
+    /**
+     * 타석 배팅 — 지금 진행 중인 타석의 결과(아웃/세이프)에 건다.
+     *
+     * <p>경기가 끝나야 정산되는 승패 배팅과 달리, 그 타석이 끝나는 순간
+     * {@code AtBatBetSettler}가 즉시 정산한다.
+     */
+    @Transactional
+    public BetResponse createAtBatBet(Long roomId, CreateAtBatBetRequest request, User proposer) {
+        if (request.betOnResult() != AtBatResult.OUT && request.betOnResult() != AtBatResult.SAFE) {
+            throw new CustomException(ErrorCode.INVALID_AT_BAT_RESULT);
+        }
+
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+        validateRoomMember(room, proposer);
+
+        Game game = room.getWatchingGame();
+        if (game == null) throw new CustomException(ErrorCode.NO_WATCHING_GAME);
+        if (game.getStatus() != GameStatus.IN_PROGRESS) {
+            throw new CustomException(ErrorCode.GAME_NOT_LIVE);
+        }
+
+        CurrentAtBat atBat = currentAtBats.find(game.getKboGameId())
+                .orElseThrow(() -> new CustomException(ErrorCode.NO_LIVE_AT_BAT));
+        if (!atBat.isOpen(Instant.now(), Duration.ofSeconds(atBatWindowSeconds))) {
+            throw new CustomException(ErrorCode.AT_BAT_BETTING_CLOSED);
+        }
+
+        Bet saved = betRepository.save(Bet.forAtBat(
+                proposer, room, game, request.content(), request.betOnResult(),
+                atBat.inning(), atBat.half(), atBat.batter()));
+
+        notifyAtBatBetCreated(room, proposer, saved, atBat);
+        return BetResponse.from(saved);
+    }
+
+    /** 제안자를 뺀 방 멤버에게 "지금 이 타석, 받을 사람 콜!" */
+    private void notifyAtBatBetCreated(Room room, User proposer, Bet bet, CurrentAtBat atBat) {
+        List<User> others = roomMemberRepository.findAllByRoomWithUser(room).stream()
+                .map(RoomMember::getUser)
+                .filter(u -> !u.getId().equals(proposer.getId()))
+                .toList();
+
+        String side = bet.getBetOnAtBatResult() == AtBatResult.OUT ? "아웃" : "세이프";
+        pushSender.sendToUsers(others, "⚾ 타석 배팅!",
+                String.format("%s님: %s회%s %s 타석 — \"%s\" · %s에 배팅",
+                        proposer.getNickname(), atBat.inning(),
+                        atBat.half() == null ? "" : atBat.half().korean(),
+                        atBat.batter(), bet.getContent(), side),
+                Map.of("type", "AT_BAT_BET_CREATED", "roomId", String.valueOf(room.getId()),
+                        "betId", String.valueOf(bet.getId())));
     }
 
     /** 콜! — 방 멤버 누구나 가능 (선착 1명), 제안자의 반대편에 배팅 */

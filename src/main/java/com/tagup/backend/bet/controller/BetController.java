@@ -1,6 +1,7 @@
 package com.tagup.backend.bet.controller;
 
 import com.tagup.backend.bet.dto.BetResponse;
+import com.tagup.backend.bet.dto.CreateAtBatBetRequest;
 import com.tagup.backend.bet.dto.CreateBetRequest;
 import com.tagup.backend.bet.service.BetService;
 import com.tagup.backend.common.response.ApiResponse;
@@ -31,6 +32,19 @@ public class BetController {
             @Valid @RequestBody CreateBetRequest request,
             @AuthenticationPrincipal User user) {
         return ResponseEntity.ok(ApiResponse.ok("내기를 제안했습니다.", betService.createBet(roomId, request, user)));
+    }
+
+    @Operation(summary = "타석 배팅 (지금 진행 중인 타석의 아웃/세이프)",
+            description = "더그아웃이 보고 있는 경기의 '지금 타석'에 겁니다. 어느 타석인지는 서버가 정합니다. "
+                    + "타석 감지 후 30초 안에만 받습니다 — 결과를 본 뒤 거는 것을 막기 위해서입니다.")
+    @PostMapping("/api/v1/rooms/{roomId}/bets/at-bat")
+    public ResponseEntity<ApiResponse<BetResponse>> createAtBatBet(
+            @PathVariable Long roomId,
+            @Valid @RequestBody CreateAtBatBetRequest request,
+            @AuthenticationPrincipal User user
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok("타석 배팅을 걸었습니다.",
+                betService.createAtBatBet(roomId, request, user)));
     }
 
     @Operation(summary = "더그아웃 내기 목록 조회")
