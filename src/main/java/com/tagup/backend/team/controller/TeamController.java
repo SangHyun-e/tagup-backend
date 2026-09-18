@@ -1,8 +1,8 @@
 package com.tagup.backend.team.controller;
 
 import com.tagup.backend.common.response.ApiResponse;
-import com.tagup.backend.team.entity.Team;
-import com.tagup.backend.team.repository.TeamRepository;
+import com.tagup.backend.team.dto.TeamResponse;
+import com.tagup.backend.team.service.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,11 +19,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class TeamController {
 
-    private final TeamRepository teamRepository;
+    private final TeamService teamService;
 
     @Operation(summary = "KBO 구단 목록 조회")
     @GetMapping
-    public ResponseEntity<ApiResponse<List<Team>>> getTeams() {
-        return ResponseEntity.ok(ApiResponse.ok(teamRepository.findAll()));
+    public ResponseEntity<ApiResponse<List<TeamResponse>>> getTeams() {
+        return ResponseEntity.ok(ApiResponse.ok(teamService.getAllTeams()));
     }
 }
