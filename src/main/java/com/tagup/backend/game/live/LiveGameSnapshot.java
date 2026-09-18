@@ -64,6 +64,25 @@ public record LiveGameSnapshot(
                 && Objects.equals(runner3, other.runner3);
     }
 
+    /**
+     * {@code other}보다 <b>과거 상태</b>인지. 경기는 뒤로 가지 않으므로 true면 KBO가 옛 스냅샷을 준 것이다.
+     *
+     * <p>회·초말이 앞서거나 어느 팀 점수든 줄었으면 과거로 본다. <b>아웃 카운트는 보지 않는다</b> —
+     * 공수 교대 순간 필드가 따로 갱신될 수 있어(타자 이름이 늦게 바뀌는 것처럼) 오판 위험이 크다.
+     * 진행 중이 아닌 스냅샷끼리는 비교하지 않는다.
+     */
+    public boolean isBehind(LiveGameSnapshot other) {
+        if (other == null || !isLive() || !other.isLive()) return false;
+        if (zero(awayScore) < zero(other.awayScore) || zero(homeScore) < zero(other.homeScore)) {
+            return true;
+        }
+        if (inning == null || other.inning == null || half == null || other.half == null) {
+            return false;
+        }
+        if (!inning.equals(other.inning)) return inning < other.inning;
+        return half == HalfInning.TOP && other.half == HalfInning.BOTTOM;
+    }
+
     private static int zero(Integer v) {
         return v == null ? 0 : v;
     }

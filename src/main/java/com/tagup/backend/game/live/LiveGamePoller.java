@@ -41,6 +41,9 @@ public class LiveGamePoller {
     private final CurrentAtBatRegistry currentAtBats;
     private final AtBatDetector detector = new AtBatDetector();
 
+    /** 옛 스냅샷 거름망. 20회(15초 주기면 5분) 연속이면 KBO의 실제 정정으로 보고 받아들인다 */
+    private final StaleSnapshotGuard staleGuard = new StaleSnapshotGuard(20);
+
     /** kboGameId → 직전 스냅샷 */
     private final Map<String, LiveGameSnapshot> lastSnapshots = new ConcurrentHashMap<>();
 
@@ -70,6 +73,7 @@ public class LiveGamePoller {
             lastSnapshots.clear();
             atBatStarts.clear();
             currentAtBats.clear();
+            staleGuard.clear();
             return;
         }
 
@@ -84,6 +88,24 @@ public class LiveGamePoller {
         for (Game game : watchable) {
             LiveGameSnapshot cur = snapshots.get(game.getKboGameId());
             if (cur == null) continue;
+
+            LiveGameSnapshot last = lastSnapshots.get(game.getKboGameId());
+            switch (staleGuard.check(game.getKboGameId(), last, cur)) {
+                case REJECT -> {
+                    log.info("[라이브] {} 옛 스냅샷 무시 — {}회{} {}:{} (직전 {}회{} {}:{})",
+                            game.getKboGameId(), cur.inning(), half(cur), cur.awayScore(), cur.homeScore(),
+                            last.inning(), half(last), last.awayScore(), last.homeScore());
+                    continue;
+                }
+                case HEAL -> {
+                    log.warn("[라이브] {} 과거 상태가 계속돼 KBO 정정으로 보고 받아들임 — {}회{} {}:{}",
+                            game.getKboGameId(), cur.inning(), half(cur), cur.awayScore(), cur.homeScore());
+                    lastSnapshots.put(game.getKboGameId(), cur);
+                    startNewAtBat(game.getKboGameId(), cur);
+                    continue;
+                }
+                case ACCEPT -> { }
+            }
 
             LiveGameSnapshot prev = lastSnapshots.put(game.getKboGameId(), cur);
             if (prev == null) {
