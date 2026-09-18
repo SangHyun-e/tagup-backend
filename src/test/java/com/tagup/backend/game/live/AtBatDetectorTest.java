@@ -251,6 +251,78 @@ class AtBatDetectorTest {
                 .isLessThan(unknowns(byPrev));
     }
 
+    // ------------------------------------------------------------------
+    // 경기의 마지막 타석 — 다음 타자가 없어 타자 이름으로는 경계를 못 잡는다
+
+    @Test
+    @DisplayName("실경기 리플레이: 경기를 끝낸 마지막 타석이 아웃으로 감지된다 (9/1 김기연)")
+    void finalAtBatFromRealGame() {
+        List<AtBatEvent> events = replayFromAtBatStart(loadFixture());
+
+        AtBatEvent last = events.getLast();
+        assertThat(last.batter()).isEqualTo("김기연");
+        assertThat(last.inning()).isEqualTo(9);
+        assertThat(last.half()).isEqualTo(HalfInning.BOTTOM);
+        assertThat(last.result()).isEqualTo(AtBatResult.OUT);
+    }
+
+    @Test
+    @DisplayName("마지막 타석: 아웃이 늘고 경기가 끝나면 아웃")
+    void finalOut() {
+        LiveGameSnapshot start = full(9, HalfInning.BOTTOM, 2, 3, 1, "손주영", "김기연");
+        LiveGameSnapshot end = finished(9, HalfInning.BOTTOM, 3, 3, 1, "손주영", "김기연");
+
+        assertThat(detector.detect(start, start, end))
+                .get().extracting(AtBatEvent::result).isEqualTo(AtBatResult.OUT);
+    }
+
+    @Test
+    @DisplayName("마지막 타석: 끝내기 득점은 세이프")
+    void walkOffIsSafe() {
+        LiveGameSnapshot start = full(9, HalfInning.BOTTOM, 1, 3, 3, "투수", "끝내기");
+        LiveGameSnapshot end = finished(9, HalfInning.BOTTOM, 1, 3, 4, "투수", "끝내기");
+
+        AtBatEvent e = detector.detect(start, start, end).orElseThrow();
+        assertThat(e.result()).isEqualTo(AtBatResult.SAFE);
+        assertThat(e.runsScored()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("마지막 타석: 끝내기 희생플라이는 일반 타석처럼 아웃")
+    void walkOffSacrificeFlyIsOut() {
+        LiveGameSnapshot start = full(9, HalfInning.BOTTOM, 1, 3, 3, "투수", "희생플라이");
+        LiveGameSnapshot end = finished(9, HalfInning.BOTTOM, 2, 3, 4, "투수", "희생플라이");
+
+        assertThat(detector.detect(start, start, end))
+                .get().extracting(AtBatEvent::result).isEqualTo(AtBatResult.OUT);
+    }
+
+    @Test
+    @DisplayName("마지막 타석: 아무 변화 없이 끝나면 (강우 콜드 등) 판정 불가")
+    void calledGameIsUnknown() {
+        LiveGameSnapshot start = full(6, HalfInning.TOP, 1, 2, 0, "타자", "투수");
+        LiveGameSnapshot end = finished(6, HalfInning.TOP, 1, 2, 0, "타자", "투수");
+
+        assertThat(detector.detect(start, start, end))
+                .get().extracting(AtBatEvent::result).isEqualTo(AtBatResult.UNKNOWN);
+    }
+
+    @Test
+    @DisplayName("마지막 타석: 종료 스냅샷이 다른 타자를 가리키면 판정하지 않는다")
+    void finalSnapshotWithDifferentBatterIsIgnored() {
+        LiveGameSnapshot start = full(9, HalfInning.BOTTOM, 2, 3, 1, "손주영", "김기연");
+        LiveGameSnapshot end = finished(9, HalfInning.BOTTOM, 3, 3, 1, "손주영", "다른타자");
+
+        assertThat(detector.detect(start, start, end)).isEmpty();
+    }
+
+    private static LiveGameSnapshot finished(int inning, HalfInning half, int out,
+                                             int awayScore, int homeScore,
+                                             String awayPlayer, String homePlayer) {
+        return new LiveGameSnapshot(LiveGameState.FINISHED, inning, half,
+                awayScore, homeScore, 0, 0, out, awayPlayer, homePlayer, null, null, null);
+    }
+
     private static LiveGameSnapshot full(int inning, HalfInning half, int out,
                                          int awayScore, int homeScore,
                                          String awayPlayer, String homePlayer) {

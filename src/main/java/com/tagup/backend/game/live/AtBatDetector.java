@@ -39,8 +39,11 @@ public class AtBatDetector {
                                        LiveGameSnapshot prev,
                                        LiveGameSnapshot cur) {
         if (prev == null || cur == null) return Optional.empty();
-        if (!prev.isLive() || !cur.isLive()) return Optional.empty();
         if (atBatStart == null || !atBatStart.isLive()) atBatStart = prev;
+        if (prev.isLive() && cur.state() == LiveGameState.FINISHED) {
+            return detectFinal(atBatStart, prev, cur);
+        }
+        if (!prev.isLive() || !cur.isLive()) return Optional.empty();
 
         String prevBatter = prev.batter();
         if (prevBatter == null || prevBatter.isBlank()) return Optional.empty();
@@ -76,6 +79,37 @@ public class AtBatDetector {
         return Optional.of(new AtBatEvent(
                 prevBatter, prev.pitcher(), prev.inning(), prev.half(),
                 result, Math.max(runs, 0), halfChanged));
+    }
+
+    /**
+     * <b>경기의 마지막 타석.</b> 다음 타자가 들어서지 않으므로 타자 이름으로는 경계를 잡을 수 없다.
+     *
+     * <p>대신 종료 스냅샷이 마지막 상태를 그대로 들고 온다 (2026-09-01 LG-두산 관측:
+     * 9회말 2아웃 김기연 → 종료 스냅샷도 9회말 김기연, <b>3아웃</b>). 그래서 타석 시작과 비교하면
+     * 경기를 끝낸 아웃은 아웃 증가로, 끝내기는 득점으로 드러난다.
+     *
+     * <p>판정 순서는 일반 타석과 같다 — 끝내기 희생플라이처럼 아웃과 득점이 함께 나면 아웃이다.
+     * 강우 콜드처럼 아무 변화 없이 끝나면 UNKNOWN(무효)이다. 주자는 종료 시 정리될 수 있어 보지 않는다.
+     */
+    private Optional<AtBatEvent> detectFinal(LiveGameSnapshot atBatStart,
+                                             LiveGameSnapshot prev,
+                                             LiveGameSnapshot cur) {
+        String batter = prev.batter();
+        if (batter == null || batter.isBlank()) return Optional.empty();
+        // 종료 스냅샷이 다른 타석을 가리키면 마지막 상태를 믿을 수 없다
+        if (!prev.sameHalfInning(cur) || !batter.equals(cur.batter())) return Optional.empty();
+
+        int runs = cur.totalScore() - atBatStart.totalScore();
+        int outDelta = zero(cur.out()) - zero(atBatStart.out());
+
+        AtBatResult result;
+        if (outDelta > 0) result = AtBatResult.OUT;
+        else if (runs > 0) result = AtBatResult.SAFE;
+        else result = AtBatResult.UNKNOWN;
+
+        return Optional.of(new AtBatEvent(
+                batter, prev.pitcher(), prev.inning(), prev.half(),
+                result, Math.max(runs, 0), result == AtBatResult.OUT));
     }
 
     private static int zero(Integer v) {
