@@ -113,6 +113,19 @@ class StaleSnapshotTest {
         }
 
         @Test
+        void 점수가_되돌아갔다_돌아와도_득점을_두_번_세지_않는다() {
+            // 9/15 KIA-SSG 5회말 실제 로그: 3:6 → 3:3(옛 스냅샷) → 3:6 에서 고명준 3점이 두 번 세져
+            // 경기 득점이 9점인데 12점으로 집계됐다. 9/15~17 득점 과다 3건이 모두 이 패턴이었다.
+            LiveGameSnapshot before = live(5, HalfInning.BOTTOM, 2, 3, 3, "조상우", "고명준");
+            LiveGameSnapshot homer = live(5, HalfInning.BOTTOM, 2, 3, 6, "조상우", "안재연");
+
+            feed(before, homer, before, homer);
+
+            assertThat(detected()).extracting(AtBatEvent::batter).containsExactly("고명준");
+            assertThat(detected()).extracting(AtBatEvent::runsScored).containsExactly(3);
+        }
+
+        @Test
         void 과거_상태가_계속되면_KBO_정정으로_보고_받아들인다() {
             LiveGameSnapshot[] seq = new LiveGameSnapshot[21];
             seq[0] = bottom5Start;
