@@ -16,22 +16,37 @@ import java.util.concurrent.ConcurrentHashMap;
 public class StaleSnapshotGuard {
 
     private final int healAfter;
+    private final int outHealAfter;
     private final Map<String, Integer> consecutive = new ConcurrentHashMap<>();
 
-    public StaleSnapshotGuard(int healAfter) {
+    public StaleSnapshotGuard(int healAfter, int outHealAfter) {
         this.healAfter = healAfter;
+        this.outHealAfter = outHealAfter;
     }
 
     public enum Verdict { ACCEPT, REJECT, HEAL }
 
     /** {@code cur}를 직전 스냅샷 {@code prev} 다음으로 받아들일지 */
     public Verdict check(String kboGameId, LiveGameSnapshot prev, LiveGameSnapshot cur) {
-        if (prev == null || !cur.isBehind(prev)) {
+        int threshold;
+        if (prev == null) {
+            threshold = 0;
+        } else if (cur.isBehind(prev)) {
+            // 회·초말 역행이나 점수 감소는 정상일 수 없다 — 오래 버틴다
+            threshold = healAfter;
+        } else if (cur.hasOutRegression(prev)) {
+            // 아웃만 줄어든 건 공수 교대 시차일 수도 있다 — 한 번 더 보고 판단한다
+            threshold = outHealAfter;
+        } else {
+            threshold = 0;
+        }
+
+        if (threshold == 0) {
             consecutive.remove(kboGameId);
             return Verdict.ACCEPT;
         }
         int n = consecutive.merge(kboGameId, 1, Integer::sum);
-        if (n >= healAfter) {
+        if (n >= threshold) {
             consecutive.remove(kboGameId);
             return Verdict.HEAL;
         }

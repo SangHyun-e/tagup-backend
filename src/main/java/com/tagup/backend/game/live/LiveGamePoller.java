@@ -41,8 +41,11 @@ public class LiveGamePoller {
     private final CurrentAtBatRegistry currentAtBats;
     private final AtBatDetector detector = new AtBatDetector();
 
-    /** 옛 스냅샷 거름망. 20회(15초 주기면 5분) 연속이면 KBO의 실제 정정으로 보고 받아들인다 */
-    private final StaleSnapshotGuard staleGuard = new StaleSnapshotGuard(20);
+    /**
+     * 옛 스냅샷 거름망. 회·초말/점수 역행은 20회(5분) 연속이면 KBO 정정으로 보고 받아들이고,
+     * 아웃만 줄어든 의심 상태는 2회 연속(30초)이면 받아들인다.
+     */
+    private final StaleSnapshotGuard staleGuard = new StaleSnapshotGuard(20, 2);
 
     /** kboGameId → 직전 스냅샷 */
     private final Map<String, LiveGameSnapshot> lastSnapshots = new ConcurrentHashMap<>();

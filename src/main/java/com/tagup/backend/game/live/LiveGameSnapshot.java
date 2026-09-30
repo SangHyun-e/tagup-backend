@@ -83,6 +83,21 @@ public record LiveGameSnapshot(
         return half == HalfInning.TOP && other.half == HalfInning.BOTTOM;
     }
 
+    /**
+     * 같은 이닝인데 <b>아웃만 줄어든</b> 상태인지 — 옛 스냅샷이 섞인 정황이다.
+     *
+     * <p>{@link #isBehind}가 아웃을 보지 않는 이유는 공수 교대 순간 회·초말과 아웃이 따로
+     * 갱신될 수 있어서다. 그래서 이건 "확실한 과거"가 아니라 <b>의심</b>으로만 다루고,
+     * 판정은 {@link StaleSnapshotGuard}가 다음 폴링까지 기다려서 내린다.
+     * (2026-09-29 키움-롯데 8회초: 2아웃 → 1아웃 → 2아웃, 한 폴링만 스쳐 지나갔다)
+     */
+    public boolean hasOutRegression(LiveGameSnapshot other) {
+        if (other == null || !isLive() || !other.isLive()) return false;
+        if (!sameHalfInning(other)) return false;
+        if (totalScore() != other.totalScore()) return false;
+        return zero(out) < zero(other.out);
+    }
+
     private static int zero(Integer v) {
         return v == null ? 0 : v;
     }
