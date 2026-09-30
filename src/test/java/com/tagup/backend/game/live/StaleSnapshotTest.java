@@ -12,7 +12,10 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
@@ -86,10 +89,13 @@ class StaleSnapshotTest {
         private final GameRepository games = mock(GameRepository.class);
         private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
         private LiveGamePoller poller;
+        private MutableClock clock;
 
         @BeforeEach
         void setUp() {
-            poller = new LiveGamePoller(client, games, publisher, new CurrentAtBatRegistry());
+            clock = new MutableClock(Instant.parse("2026-09-29T11:00:00Z"));
+            poller = new LiveGamePoller(client, games, publisher, new CurrentAtBatRegistry(), clock);
+            ReflectionTestUtils.setField(poller, "maxPollGapMs", 90_000L);
             when(games.findByGameDateAndStatusIn(any(), anyList())).thenReturn(List.of(game()));
         }
 
@@ -152,6 +158,47 @@ class StaleSnapshotTest {
         }
 
         @Test
+        void 폴링이_끊겼다_돌아오면_공백_구간을_타석으로_만들지_않는다() {
+            // 9/20 절전에서 깬 직후 "나성범 → OUT +10점" 같은 가짜 타석이 만들어졌다.
+            // 공백 동안 경기가 3이닝 진행되고 5점이 났어도 타석 하나로 뭉뚱그리면 안 된다.
+            LiveGameSnapshot before = live(4, HalfInning.TOP, 1, 0, 0, "타자A", "투수");
+            LiveGameSnapshot afterGap = live(7, HalfInning.TOP, 1, 5, 0, "타자B", "투수");
+
+            feed(before);
+            clock.advanceSeconds(600);          // 10분 절전
+            feed(afterGap);
+
+            assertThat(detected()).isEmpty();
+            assertThat(poller.latest(GAME_ID)).contains(afterGap);
+        }
+
+        @Test
+        void 공백_이후_다음_타석부터는_정상_감지한다() {
+            LiveGameSnapshot before = live(4, HalfInning.TOP, 1, 0, 0, "타자A", "투수");
+            LiveGameSnapshot afterGap = live(7, HalfInning.TOP, 1, 5, 0, "타자B", "투수");
+            LiveGameSnapshot next = live(7, HalfInning.TOP, 2, 5, 0, "타자C", "투수");
+
+            feed(before);
+            clock.advanceSeconds(600);
+            feed(afterGap, next);
+
+            assertThat(detected()).extracting(AtBatEvent::batter).containsExactly("타자B");
+            assertThat(detected()).extracting(AtBatEvent::runsScored).containsExactly(0);
+        }
+
+        @Test
+        void 짧은_지연은_기준을_버리지_않는다() {
+            LiveGameSnapshot before = live(4, HalfInning.TOP, 1, 0, 0, "타자A", "투수");
+            LiveGameSnapshot next = live(4, HalfInning.TOP, 2, 0, 0, "타자B", "투수");
+
+            feed(before);
+            clock.advanceSeconds(45);           // 폴링 몇 번 밀린 정도
+            feed(next);
+
+            assertThat(detected()).extracting(AtBatEvent::batter).containsExactly("타자A");
+        }
+
+        @Test
         void 과거_상태가_계속되면_KBO_정정으로_보고_받아들인다() {
             LiveGameSnapshot[] seq = new LiveGameSnapshot[21];
             seq[0] = bottom5Start;
@@ -167,6 +214,7 @@ class StaleSnapshotTest {
             for (LiveGameSnapshot s : seq) {
                 when(client.fetchSnapshots(any(LocalDate.class))).thenReturn(Map.of(GAME_ID, s));
                 poller.poll();
+                clock.advanceSeconds(15);
             }
         }
 
@@ -191,6 +239,23 @@ class StaleSnapshotTest {
             ReflectionTestUtils.setField(g, "id", 1L);
             return g;
         }
+    }
+
+    /** 절전 구간을 흉내 내기 위한 조작 가능한 시계 */
+    private static class MutableClock extends Clock {
+        private Instant now;
+
+        MutableClock(Instant start) {
+            this.now = start;
+        }
+
+        void advanceSeconds(long seconds) {
+            now = now.plusSeconds(seconds);
+        }
+
+        @Override public ZoneId getZone() { return ZoneId.of("Asia/Seoul"); }
+        @Override public Clock withZone(ZoneId zone) { return this; }
+        @Override public Instant instant() { return now; }
     }
 
     private static LiveGameSnapshot live(int inning, HalfInning half, int out,
