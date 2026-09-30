@@ -11,6 +11,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -39,6 +41,7 @@ public class LiveGamePoller {
     private final GameRepository gameRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentAtBatRegistry currentAtBats;
+    private final Clock clock;
     private final AtBatDetector detector = new AtBatDetector();
 
     /**
@@ -62,11 +65,19 @@ public class LiveGamePoller {
     /** 그날 첫 수집에만 요약을 남긴다 — 폴러가 살아 있고 응답이 파싱된다는 증거 */
     private LocalDate loggedFor;
 
+    /** 마지막으로 폴링이 돈 시각 — 절전·네트워크 중단으로 생긴 공백을 알아내는 데 쓴다 */
+    private Instant lastPollAt;
+
+    @Value("${tagup.live.max-poll-gap-ms:90000}")
+    private long maxPollGapMs;
+
     @Value("${tagup.live.poll-interval-ms:15000}")
     private long pollIntervalMs;
 
     @Scheduled(fixedDelayString = "${tagup.live.poll-interval-ms:15000}")
     public void poll() {
+        discardBaselineAfterGap();
+
         LocalDate today = LocalDate.now();
 
         // 오늘 볼 경기가 없으면 KBO를 호출하지 않는다 (불필요한 트래픽 차단)
@@ -134,6 +145,34 @@ public class LiveGamePoller {
                 }
             }
         }
+    }
+
+    /**
+     * <b>폴링이 끊겼다 돌아오면 기준 스냅샷을 버린다.</b>
+     *
+     * <p>노트북이 자는 동안 경기는 계속 진행된다. 깨어나서 옛 기준과 비교하면 그 사이의 모든 변화가
+     * <b>타석 하나의 결과로 뭉뚱그려진다</b> — 2026-09-20 절전에서 깬 직후 "나성범 → OUT +10점",
+     * 9/18 "최인호 → OUT +8점" 같은 가짜 타석이 만들어졌고, 중계 문구와 배팅 정산까지 그대로 탔다.
+     *
+     * <p>공백 동안의 타석은 어차피 복원할 수 없다. 틀린 결과를 만드느니 그 구간을 비우고
+     * 다음 타석부터 다시 잡는 편이 낫다.
+     */
+    private void discardBaselineAfterGap() {
+        Instant now = clock.instant();
+        Instant previous = lastPollAt;
+        lastPollAt = now;
+
+        if (previous == null || lastSnapshots.isEmpty()) return;
+
+        long gapMs = Duration.between(previous, now).toMillis();
+        if (gapMs <= maxPollGapMs) return;
+
+        log.warn("[라이브] 폴링 공백 {}초 — 기준 스냅샷을 버린다 (절전·네트워크 중단 추정). "
+                + "공백 동안의 타석은 감지하지 않는다", gapMs / 1000);
+        lastSnapshots.clear();
+        atBatStarts.clear();
+        currentAtBats.clear();
+        staleGuard.clear();
     }
 
     /**
