@@ -42,6 +42,7 @@ public class LiveGamePoller {
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentAtBatRegistry currentAtBats;
     private final Clock clock;
+    private final LiveDailyReport dailyReport;
     private final AtBatDetector detector = new AtBatDetector();
 
     /**
@@ -106,6 +107,7 @@ public class LiveGamePoller {
             LiveGameSnapshot last = lastSnapshots.get(game.getKboGameId());
             switch (staleGuard.check(game.getKboGameId(), last, cur)) {
                 case REJECT -> {
+                    dailyReport.recordStaleSnapshot();
                     log.info("[라이브] {} 옛 스냅샷 무시 — {}회{} {}:{} (직전 {}회{} {}:{})",
                             game.getKboGameId(), cur.inning(), half(cur), cur.awayScore(), cur.homeScore(),
                             last.inning(), half(last), last.awayScore(), last.homeScore());
@@ -131,8 +133,10 @@ public class LiveGamePoller {
             logStateTransition(game.getKboGameId(), prev, cur);
 
             LiveGameSnapshot start = atBatStarts.getOrDefault(game.getKboGameId(), prev);
+            boolean gameJustEnded = prev.isLive() && !cur.isLive();
             detector.detect(start, prev, cur).ifPresent(event -> {
                 logAtBat(game.getKboGameId(), event, cur);
+                if (gameJustEnded) dailyReport.recordFinalAtBat();
                 publish(game, event);
             });
 
