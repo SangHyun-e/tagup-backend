@@ -55,7 +55,9 @@ public class KboGameCrawler {
         try {
             String json = fetchScheduleJson(year, month);
             List<CrawledGame> games = parseGames(json, year);
-            log.info("KBO 월간 크롤링 완료 {}-{:02d}, 경기 수={}", year, month, games.size());
+            // SLF4J는 {:02d} 같은 포맷 지정자를 모른다 — 이전 로그는 '경기 수' 자리에 월을 찍고 있었다
+            log.info("KBO 월간 크롤링 완료 {}-{}, 경기 수={}",
+                    year, String.format("%02d", month), games.size());
             return games;
         } catch (Exception e) {
             log.warn("KBO 월간 크롤링 실패 {}-{}: {}", year, month, e.getMessage());

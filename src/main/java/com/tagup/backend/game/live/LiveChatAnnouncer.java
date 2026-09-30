@@ -35,6 +35,7 @@ public class LiveChatAnnouncer {
     private static final String TYPE = "LIVE";
 
     private final RoomRepository roomRepository;
+    private final LiveDailyReport dailyReport;
 
     @Value("${tagup.live.relay-enabled:true}")
     private boolean relayEnabled;
@@ -81,6 +82,7 @@ public class LiveChatAnnouncer {
 
                 db.collection("rooms").document(room.getChatKey())
                         .collection("messages").add(message);
+                dailyReport.recordRelayMessage();
             }
         } catch (Exception e) {
             log.warn("[중계] 발송 실패 {} ({}): {}", kboGameId, kind, e.toString());
