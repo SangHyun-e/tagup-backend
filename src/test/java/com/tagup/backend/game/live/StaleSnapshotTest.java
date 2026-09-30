@@ -126,6 +126,32 @@ class StaleSnapshotTest {
         }
 
         @Test
+        void 아웃만_줄어든_스냅샷이_한_번_스쳐가면_무시한다() {
+            // 9/29 키움-롯데 8회초 실제 로그: 1아웃(박찬혁 타석) → 2아웃(박찬혁 아웃, 임병욱 등장)
+            // → 1아웃 박찬혁(옛 스냅샷) → 2아웃 임병욱.
+            // 그대로 두면 유령 타석(임병욱 UNKNOWN)이 생기고 박찬혁 아웃이 두 번 감지된다.
+            LiveGameSnapshot atBat = live(8, HalfInning.TOP, 1, 2, 4, "박찬혁", "김원중");
+            LiveGameSnapshot out = live(8, HalfInning.TOP, 2, 2, 4, "임병욱", "김원중");
+            LiveGameSnapshot stale = live(8, HalfInning.TOP, 1, 2, 4, "박찬혁", "김원중");
+
+            feed(atBat, out, stale, out);
+
+            assertThat(detected()).extracting(AtBatEvent::batter).containsExactly("박찬혁");
+            assertThat(detected()).extracting(AtBatEvent::result).containsExactly(AtBatResult.OUT);
+        }
+
+        @Test
+        void 아웃이_줄어든_상태가_두_번_이어지면_받아들인다() {
+            // 공수 교대 시차로 회·초말보다 아웃이 늦게 갱신되는 경우까지 막으면 한 이닝을 통째로 놓친다
+            LiveGameSnapshot twoOut = live(8, HalfInning.TOP, 2, 2, 4, "박찬혁", "김원중");
+            LiveGameSnapshot zeroOut = live(8, HalfInning.TOP, 0, 2, 4, "새타자", "김원중");
+
+            feed(twoOut, zeroOut, zeroOut);
+
+            assertThat(poller.latest(GAME_ID)).contains(zeroOut);
+        }
+
+        @Test
         void 과거_상태가_계속되면_KBO_정정으로_보고_받아들인다() {
             LiveGameSnapshot[] seq = new LiveGameSnapshot[21];
             seq[0] = bottom5Start;

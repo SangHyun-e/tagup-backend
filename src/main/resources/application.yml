@@ -124,8 +124,10 @@ tagup:
     relay-enabled: true
     # 검증 전용 — 사람이 매일 밤 앱에서 배팅을 걸지 않아도 정산 검증이 쌓이게 한다.
     # 프로덕션에서 켜면 실제 유저의 배팅 목록에 가짜 배팅이 섞인다.
+    # 2026-09-18~29 검증 완료(82건 전부 정산, 마지막 타석 포함)로 껐다.
+    # 다시 켜면 방 1에 가짜 배팅이 쌓인다 — 검증이 필요할 때만 true.
     auto-test-bet:
-      enabled: true
+      enabled: false
       room-id: 1
       proposer-id: 1
       receiver-id: 2
