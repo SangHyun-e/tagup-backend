@@ -9,6 +9,8 @@ import com.tagup.backend.bet.entity.BetType;
 import com.tagup.backend.game.live.AtBatResult;
 import com.tagup.backend.common.response.ApiResponse;
 import com.tagup.backend.game.dto.GameResponse;
+import com.tagup.backend.game.dto.LiveStateResponse;
+import com.tagup.backend.game.live.HalfInning;
 import com.tagup.backend.game.entity.GameStatus;
 import com.tagup.backend.room.dto.RoomMemberResponse;
 import com.tagup.backend.room.dto.RoomResponse;
@@ -21,6 +23,7 @@ import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -102,7 +105,7 @@ class ApiContractTest {
                     1L, "20260826NCLG0", LocalDate.of(2026, 8, 26), LocalTime.of(18, 30),
                     new GameResponse.TeamInfo(3L, "LG 트윈스", "LG", "http://x/lg.png"),
                     new GameResponse.TeamInfo(9L, "NC 다이노스", "NC", "http://x/nc.png"),
-                    status, 2, 1, inning, "잠실");
+                    status, 2, 1, inning, "잠실", null);
         }
 
         @Test
@@ -112,9 +115,39 @@ class ApiContractTest {
             assertThat(keysOf(json)).containsExactlyInAnyOrder(
                     "id", "kboGameId", "gameDate", "gameTime",
                     "homeTeam", "awayTeam", "status",
-                    "homeScore", "awayScore", "inning", "stadium");
+                    "homeScore", "awayScore", "inning", "stadium", "live");
             assertThat(keysOf(json.get("homeTeam")))
                     .containsExactlyInAnyOrder("id", "name", "shortName", "logoUrl");
+        }
+
+        @Test
+        @DisplayName("진행 중 경기의 live 필드 구성 — 앱은 경기 중 점수를 여기서 읽는다")
+        void liveStateShape() {
+            LiveStateResponse live = new LiveStateResponse(
+                    7, HalfInning.TOP, 3, 5, 2, 1, 2,
+                    new LiveStateResponse.Bases(true, true, false),
+                    "박민우", "홍건희", Instant.parse("2026-10-01T10:30:00Z"));
+
+            JsonNode json = toJson(new GameResponse(
+                    1L, "20260826NCLG0", LocalDate.of(2026, 8, 26), LocalTime.of(18, 30),
+                    new GameResponse.TeamInfo(3L, "LG 트윈스", "LG", "http://x/lg.png"),
+                    new GameResponse.TeamInfo(9L, "NC 다이노스", "NC", "http://x/nc.png"),
+                    GameStatus.IN_PROGRESS, null, null, 7, "잠실", live));
+
+            JsonNode node = json.get("live");
+            assertThat(keysOf(node)).containsExactlyInAnyOrder(
+                    "inning", "half", "awayScore", "homeScore",
+                    "out", "ball", "strike", "bases", "batter", "pitcher", "updatedAt");
+            assertThat(keysOf(node.get("bases"))).containsExactlyInAnyOrder("first", "second", "third");
+            assertThat(node.get("half").asString()).isEqualTo("TOP");
+            assertThat(node.get("awayScore").asInt()).isEqualTo(3);
+            assertThat(node.get("bases").get("second").asBoolean()).isTrue();
+        }
+
+        @Test
+        @DisplayName("경기 중이 아니면 live 는 null 이다")
+        void liveIsNullWhenNotRunning() {
+            assertThat(toJson(sample(GameStatus.SCHEDULED, null)).get("live").isNull()).isTrue();
         }
 
         @Test
@@ -289,7 +322,7 @@ class ApiContractTest {
                 1L, "G", LocalDate.of(2026, 8, 26), LocalTime.of(18, 30),
                 new GameResponse.TeamInfo(1L, "n", "s", "u"),
                 new GameResponse.TeamInfo(2L, "n", "s", "u"),
-                GameStatus.SCHEDULED, null, null, null, "잠실"));
+                GameStatus.SCHEDULED, null, null, null, "잠실", null));
 
         assertThat(json.get("gameDate").asText()).isEqualTo("2026-08-26");
         assertThat(json.get("gameTime").asText()).startsWith("18:30");

@@ -41,6 +41,7 @@ public class LiveGamePoller {
     private final GameRepository gameRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final CurrentAtBatRegistry currentAtBats;
+    private final LiveScoreboardRegistry scoreboards;
     private final Clock clock;
     private final LiveDailyReport dailyReport;
     private final AtBatDetector detector = new AtBatDetector();
@@ -88,6 +89,7 @@ public class LiveGamePoller {
             lastSnapshots.clear();
             atBatStarts.clear();
             currentAtBats.clear();
+            scoreboards.clear();
             staleGuard.clear();
             return;
         }
@@ -122,6 +124,8 @@ public class LiveGamePoller {
                 }
                 case ACCEPT -> { }
             }
+
+            scoreboards.update(game.getKboGameId(), cur);
 
             LiveGameSnapshot prev = lastSnapshots.put(game.getKboGameId(), cur);
             if (prev == null) {
@@ -176,6 +180,7 @@ public class LiveGamePoller {
         lastSnapshots.clear();
         atBatStarts.clear();
         currentAtBats.clear();
+        scoreboards.clear();
         staleGuard.clear();
     }
 

@@ -17,11 +17,17 @@ public record GameResponse(
         Integer homeScore,
         Integer awayScore,
         Integer inning,
-        String stadium
+        String stadium,
+        /** 진행 중이고 수집이 살아 있을 때만 채워진다. 그 외에는 null */
+        LiveStateResponse live
 ) {
     public record TeamInfo(Long id, String name, String shortName, String logoUrl) {}
 
     public static GameResponse from(Game game) {
+        return from(game, null);
+    }
+
+    public static GameResponse from(Game game, LiveStateResponse live) {
         return new GameResponse(
                 game.getId(),
                 game.getKboGameId(),
@@ -43,7 +49,8 @@ public record GameResponse(
                 game.getHomeScore(),
                 game.getAwayScore(),
                 game.getInning(),
-                game.getStadium()
+                game.getStadium(),
+                live
         );
     }
 }
