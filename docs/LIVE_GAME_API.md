@@ -51,11 +51,20 @@ KBO 일정 API는 **경기 중에 점수 칸을 `0vs0`으로 고정**해서 보�
 ```
 
 - `live`는 **진행 중이고 수집이 살아 있을 때만** 채워진다. 그 외에는 `null`이다.
+  (목록·상세 응답 안에서는 `"live": null`로 내려온다. 아래 2번의 단일 조회와 다르니 주의)
 - `/api/v1/games/upcoming`은 예정 경기만 담으므로 `live`가 항상 `null`이다.
 
 ## 2. 그 경기만 짧은 주기로 볼 때
 
-`GET /api/v1/games/{gameId}/live` → `data`가 위 `live` 객체 그대로, 없으면 `null`.
+`GET /api/v1/games/{gameId}/live` → `data`가 위 `live` 객체 그대로.
+
+**상태가 없으면 `data` 키 자체가 빠진다.** 공통 응답 래퍼가 null 필드를 제외하기 때문이다:
+
+```json
+{ "success": true }
+```
+
+`data`가 `null`로 오는 게 아니라 **아예 없으므로**, 앱에서 `res.data?.live` 식으로 안전하게 읽어야 한다.
 
 채팅 화면처럼 한 경기만 자주 갱신할 때 쓴다. 목록 전체를 다시 받을 필요가 없다.
 
