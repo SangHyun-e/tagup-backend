@@ -59,6 +59,8 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     // Boot 4에서 테스트 슬라이스가 모듈로 분리됨 — @DataJpaTest 는 더 이상 starter-test 에 없다
     testImplementation 'org.springframework.boot:spring-boot-data-jpa-test'
+    // MockMvc 기반 보안 테스트용 (@AutoConfigureMockMvc) — 같은 이유로 별도 모듈이다
+    testImplementation 'org.springframework.boot:spring-boot-webmvc-test'
     testImplementation 'org.springframework.security:spring-security-test'
 }
 

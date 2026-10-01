@@ -38,8 +38,12 @@ mysql -h <RDS_ENDPOINT> -u <ADMIN> -p \
   -e "CREATE DATABASE tagupdb DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 
 # 스키마 적용 (순서대로)
-mysql -h <RDS_ENDPOINT> -u <USER> -p tagupdb < src/main/resources/db/migration/V1__initial_schema.sql
-mysql -h <RDS_ENDPOINT> -u <USER> -p tagupdb < src/main/resources/db/migration/V2__add_user_devices.sql
+for f in src/main/resources/db/migration/V*.sql; do
+  echo "적용: $f"
+  mysql -h <RDS_ENDPOINT> -u <USER> -p tagupdb < "$f" || break
+done
+# 현재: V1(초기 스키마) V2(기기 토큰) V3(관전 경기) V4(타석 배팅) V5(유저 권한·상태)
+# 번호 순서대로 적용해야 한다. 새 마이그레이션이 추가되면 위 루프가 자동으로 포함한다.
 
 # 확인 — 7개 테이블이 나와야 한다
 mysql -h <RDS_ENDPOINT> -u <USER> -p tagupdb -e "SHOW TABLES;"
@@ -118,7 +122,7 @@ cd ~/tagup && docker compose logs -f app
 
 | 증상 | 원인 / 조치 |
 |---|---|
-| 기동 실패, 로그에 `SchemaManagementException` | 2단계 스키마 미적용. V1·V2를 적용할 것 |
+| 기동 실패, 로그에 `SchemaManagementException` | 2단계 스키마 미적용. `db/migration/V*.sql` 을 번호 순으로 전부 적용할 것 |
 | 기동 실패, `Access denied` / `Communications link failure` | RDS 보안 그룹에서 EC2 3306 인바운드 미허용, 또는 `.env`의 DB 정보 오류 |
 | 한글이 `????` | RDS 파라미터 그룹 charset이 utf8mb4가 아님. 변경 후 **DB 재생성 필요** |
 | EC2에서 `docker compose pull` 401 | GHCR 패키지가 private이고 토큰 권한 부족. 패키지를 public으로 바꾸거나 `read:packages` PAT 사용 |

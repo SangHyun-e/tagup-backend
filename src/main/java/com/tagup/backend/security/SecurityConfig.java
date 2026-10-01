@@ -35,7 +35,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/teams").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/games/**").permitAll()
-                        .requestMatchers("/api/v1/admin/**").permitAll()
+                        // 관리자 API — 크롤링을 수동으로 돌리는 엔드포인트다. 열어두면 아무나
+                        // 우리 서버를 통해 KBO를 두드릴 수 있다 (2026-09-30까지 열려 있었다)
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
