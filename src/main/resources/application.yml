@@ -62,6 +62,15 @@ firebase:
   project-id: ${FIREBASE_PROJECT_ID}
   credentials-base64: ${FIREBASE_CREDENTIALS}
 
+tagup:
+  security:
+    # Firebase 초기화가 실패하면 기동 자체를 막는다.
+    # 켜지 않으면 토큰 검증을 건너뛰는 로컬 개발용 경로가 살아 있어, 남의 uid 문자열만 알면
+    # 그 사람으로 인증된다. 프로덕션에서는 절대 열려 있어선 안 된다.
+    require-firebase: true
+    # 관리자로 지정할 이메일 (쉼표 구분). 기동할 때마다 반영된다
+    admin-emails: ${ADMIN_EMAILS:}
+
 management:
   endpoints:
     web:
@@ -114,6 +123,8 @@ firebase:
 tagup:
   security:
     require-firebase: true
+    # 관리자로 지정할 이메일 (쉼표 구분). .env 의 ADMIN_EMAILS 로 넘긴다
+    admin-emails: ${ADMIN_EMAILS:}
   live:
     # 라이브 폴러 — 외부 사이트를 짧은 주기로 호출하므로 명시적으로 켤 때만 동작한다
     enabled: true

@@ -40,6 +40,16 @@ public class User {
     @JoinColumn(name = "team_id")
     private Team favoriteTeam;
 
+    /** 권한. null인 과거 행은 일반 유저로 본다 */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private UserRole role;
+
+    /** 상태. null인 과거 행은 정상으로 본다 */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20)
+    private UserStatus status;
+
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;
@@ -53,6 +63,45 @@ public class User {
         this.email = email;
         this.password = password;
         this.nickname = nickname;
+        this.role = UserRole.USER;
+        this.status = UserStatus.ACTIVE;
+    }
+
+    /**
+     * 권한. <b>null을 일반 유저로 돌려준다</b> — 컬럼이 추가되기 전에 만들어진 행이 있다.
+     * (로컬 H2는 {@code ddl-auto: update}로 컬럼만 붙고 기존 행은 비어 있다)
+     */
+    public UserRole getRole() {
+        return role == null ? UserRole.USER : role;
+    }
+
+    /** 상태. null은 정상으로 본다 — 위와 같은 이유 */
+    public UserStatus getStatus() {
+        return status == null ? UserStatus.ACTIVE : status;
+    }
+
+    public boolean isAdmin() {
+        return getRole() == UserRole.ADMIN;
+    }
+
+    public boolean canUseService() {
+        return getStatus().canUseService();
+    }
+
+    public void promoteToAdmin() {
+        this.role = UserRole.ADMIN;
+    }
+
+    public void block() {
+        this.status = UserStatus.BLOCKED;
+    }
+
+    public void unblock() {
+        this.status = UserStatus.ACTIVE;
+    }
+
+    public void withdraw() {
+        this.status = UserStatus.WITHDRAWN;
     }
 
     public void updateFavoriteTeam(Team team) {

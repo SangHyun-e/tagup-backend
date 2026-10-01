@@ -6,6 +6,7 @@ import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseToken;
 import com.tagup.backend.user.entity.User;
+import com.tagup.backend.user.entity.UserStatus;
 import com.tagup.backend.user.repository.UserRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -14,6 +15,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -39,13 +41,29 @@ public class FirebaseTokenFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(token)) {
             User user = resolveUser(token);
             if (user != null) {
-                UsernamePasswordAuthenticationToken auth =
-                        new UsernamePasswordAuthenticationToken(user, null, List.of());
+                // 차단·탈퇴 계정은 여기서 끊는다. Firebase에서 계정을 비활성화해도 이미 발급된
+                // ID 토큰은 최대 1시간 더 통과하므로, 우리 DB 상태가 실질적인 차단 수단이다.
+                if (!user.canUseService()) {
+                    reject(response, user.getStatus());
+                    return;
+                }
+                UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                        user, null, List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole())));
                 SecurityContextHolder.getContext().setAuthentication(auth);
             }
         }
 
         filterChain.doFilter(request, response);
+    }
+
+    /** 차단·탈퇴 사유를 그대로 알려준다 — 앱이 "왜 안 되는지"를 보여줄 수 있어야 한다 */
+    private void reject(HttpServletResponse response, UserStatus status) throws IOException {
+        String message = status == UserStatus.WITHDRAWN
+                ? "탈퇴한 계정입니다."
+                : "이용이 제한된 계정입니다.";
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setContentType("application/json;charset=UTF-8");
+        response.getWriter().write("{\"success\":false,\"message\":\"" + message + "\"}");
     }
 
     private User resolveUser(String token) {

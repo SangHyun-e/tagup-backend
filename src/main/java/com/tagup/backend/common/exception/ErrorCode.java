@@ -12,6 +12,7 @@ public enum ErrorCode {
     INVALID_FIREBASE_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 Firebase 토큰입니다."),
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
+    CANNOT_BLOCK_SELF(HttpStatus.BAD_REQUEST, "자기 계정은 차단할 수 없습니다."),
 
     // Room
     ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "더그아웃을 찾을 수 없습니다."),
