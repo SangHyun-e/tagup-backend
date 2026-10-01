@@ -2,6 +2,7 @@ package com.tagup.backend.game.controller;
 
 import com.tagup.backend.common.response.ApiResponse;
 import com.tagup.backend.game.dto.GameResponse;
+import com.tagup.backend.game.dto.LiveStateResponse;
 import com.tagup.backend.game.service.GameService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -45,5 +46,15 @@ public class GameController {
     @GetMapping("/{gameId}")
     public ResponseEntity<ApiResponse<GameResponse>> getGame(@PathVariable Long gameId) {
         return ResponseEntity.ok(ApiResponse.ok(gameService.getGame(gameId)));
+    }
+
+    @Operation(
+            summary = "진행 중인 경기의 지금 상태",
+            description = "점수·이닝·아웃·주자·타자·투수. 경기가 진행 중이 아니거나 수집이 멈춰 값이 "
+                    + "오래됐으면 data 가 null 이다. KBO 일정 API는 경기 중 점수를 0:0으로 주므로 "
+                    + "진행 중 점수는 반드시 이 API를 쓸 것.")
+    @GetMapping("/{gameId}/live")
+    public ResponseEntity<ApiResponse<LiveStateResponse>> getLiveState(@PathVariable Long gameId) {
+        return ResponseEntity.ok(ApiResponse.ok(gameService.getLiveState(gameId).orElse(null)));
     }
 }

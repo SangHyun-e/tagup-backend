@@ -94,8 +94,8 @@ class StaleSnapshotTest {
         @BeforeEach
         void setUp() {
             clock = new MutableClock(Instant.parse("2026-09-29T11:00:00Z"));
-            poller = new LiveGamePoller(client, games, publisher, new CurrentAtBatRegistry(), clock,
-                    new LiveDailyReport(clock));
+            poller = new LiveGamePoller(client, games, publisher, new CurrentAtBatRegistry(),
+                    new LiveScoreboardRegistry(clock), clock, new LiveDailyReport(clock));
             ReflectionTestUtils.setField(poller, "maxPollGapMs", 90_000L);
             when(games.findByGameDateAndStatusIn(any(), anyList())).thenReturn(List.of(game()));
         }
