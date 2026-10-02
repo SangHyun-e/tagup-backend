@@ -44,21 +44,24 @@ public class LiveChatAnnouncer {
     @Transactional(readOnly = true)
     public void onAtBatStarted(AtBatStartedEvent event) {
         send(event.gameId(), event.kboGameId(),
-                LiveRelayMessage.atBatStarted(event), "AT_BAT_START");
+                LiveRelayMessage.atBatStarted(event), "AT_BAT_START",
+                LiveRelayMessage.startedData(event));
     }
 
     @EventListener
     @Transactional(readOnly = true)
     public void onAtBatFinished(AtBatDetectedEvent event) {
         send(event.gameId(), event.kboGameId(),
-                LiveRelayMessage.atBatFinished(event.atBat()), "AT_BAT_RESULT");
+                LiveRelayMessage.atBatFinished(event.atBat()), "AT_BAT_RESULT",
+                LiveRelayMessage.finishedData(event.atBat()));
     }
 
     /**
      * <b>실패해도 밖으로 던지지 않는다.</b> 리스너는 폴러 스레드에서 동기 호출되므로,
      * 중계 한 건 때문에 그 주기의 경기 감지가 죽으면 손해가 훨씬 크다.
      */
-    private void send(Long gameId, String kboGameId, String content, String kind) {
+    private void send(Long gameId, String kboGameId, String content, String kind,
+                      Map<String, Object> live) {
         if (!relayEnabled) return;
         if (FirebaseApp.getApps().isEmpty()) {
             log.debug("[중계] Firebase 미초기화로 발송 생략 {}", kboGameId);
@@ -78,6 +81,8 @@ public class LiveChatAnnouncer {
                 message.put("content", content);
                 message.put("type", TYPE);
                 message.put("liveKind", kind);
+                // 앱이 아이콘·색으로 직접 그린다. content 는 푸시 알림과 구버전 앱용 대비책이다
+                message.put("live", live);
                 message.put("createdAt", FieldValue.serverTimestamp());
 
                 db.collection("rooms").document(room.getChatKey())
