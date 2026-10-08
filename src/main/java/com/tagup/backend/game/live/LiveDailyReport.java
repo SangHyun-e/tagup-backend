@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDate;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -94,10 +95,30 @@ public class LiveDailyReport {
                         relayMessages.get());
     }
 
-    /** 날짜가 바뀌었는데 요약이 남지 않았다면(재시작·경기 없는 날) 조용히 넘긴다 */
-    private synchronized void rollOver() {
+    /**
+     * 날짜가 바뀌면 <b>지난 날 요약을 여기서라도 남긴다.</b>
+     *
+     * <p>23:55 예약 작업은 그 시각에 기기가 자고 있으면 그냥 지나간다. 2026-10-03~06에 실제로
+     * 그렇게 돼서 경기가 있었는데도 요약이 한 줄도 남지 않았다. 데이터는 수집됐는데 결과를
+     * 한눈에 볼 수단이 사라진 것이다. 그래서 날짜가 바뀐 걸 처음 알아차린 순간에도 남긴다.
+     */
+    private void rollOver() {
+        rollOverSummary().ifPresent(line -> log.info("{}", line));
+    }
+
+    /** 날짜가 바뀌었고 남길 내용이 있으면 지난 날 요약을 돌려준다 (테스트에서 직접 확인) */
+    synchronized Optional<String> rollOverSummary() {
         LocalDate today = LocalDate.now(clock);
-        if (!today.equals(day)) reset(today);
+        if (today.equals(day)) return Optional.empty();
+
+        Optional<String> pending = hasData() ? Optional.of(summaryLine()) : Optional.empty();
+        reset(today);
+        return pending;
+    }
+
+    private boolean hasData() {
+        return out.get() + safe.get() + unknown.get() + relayMessages.get()
+                + staleSnapshots.get() + pollGaps.get() > 0;
     }
 
     private synchronized void reset(LocalDate today) {
