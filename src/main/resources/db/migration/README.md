@@ -46,6 +46,7 @@ prod는 `ddl-auto: validate` 다. **Hibernate가 테이블을 만들어주지 �
 | `V3__add_room_watching_game.sql` | 더그아웃의 '오늘 보는 경기' |
 | `V4__add_at_bat_bet.sql` | 타석 배팅 (`type`, `at_bat_*`, `bet_on_team_id` NULL 허용) |
 | `V5__add_user_role_status.sql` | 유저 권한(`role`)·상태(`status`) — 관리자 구분과 자체 블랙리스트 |
+| `V6__add_report_and_block.sql` | 신고(`reports`)·사용자 차단(`user_blocks`) — 애플 심사 1.2 요건 |
 
 ## 적용 방법
 
