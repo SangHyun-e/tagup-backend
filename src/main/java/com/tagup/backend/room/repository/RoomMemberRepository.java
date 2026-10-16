@@ -8,9 +8,16 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface RoomMemberRepository extends JpaRepository<RoomMember, Long> {
     boolean existsByRoomAndUser(Room room, User user);
+
+    Optional<RoomMember> findByRoomAndUser(Room room, User user);
+
+    long countByRoom(Room room);
+
+    void deleteByUser(User user);
 
     @Query("SELECT rm FROM RoomMember rm JOIN FETCH rm.room WHERE rm.user = :user")
     List<RoomMember> findAllByUserWithRoom(@Param("user") User user);

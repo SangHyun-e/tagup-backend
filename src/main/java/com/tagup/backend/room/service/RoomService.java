@@ -1,5 +1,7 @@
 package com.tagup.backend.room.service;
 
+import com.tagup.backend.bet.repository.BetRepository;
+import com.tagup.backend.bet.entity.BetStatus;
 import com.tagup.backend.common.exception.CustomException;
 import com.tagup.backend.common.exception.ErrorCode;
 import com.tagup.backend.game.entity.Game;
@@ -34,6 +36,7 @@ public class RoomService {
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
     private final GameRepository gameRepository;
+    private final BetRepository betRepository;
     private final WatchingGameSuggester watchingGameSuggester = new WatchingGameSuggester();
 
     @Transactional
@@ -122,6 +125,36 @@ public class RoomService {
         return roomMemberRepository.findAllByRoomWithUser(room).stream()
                 .map(RoomMemberResponse::from)
                 .toList();
+    }
+
+    /**
+     * 더그아웃에서 나간다.
+     *
+     * <p><b>정산이 남은 내기가 있으면 막는다.</b> 나간 사람의 내기를 나중에 정산하면 결과를 보여줄
+     * 곳이 없고, 상대방은 영문도 모른 채 기다리게 된다. 먼저 정산하거나 취소하고 나가야 한다.
+     *
+     * <p>마지막 한 명이 나가면 방도 정리한다 — 아무도 못 들어오는 방이 태그코드만 붙잡고 있을
+     * 이유가 없다. 다만 내기 기록이 남아 있으면 방을 지울 수 없으므로 그대로 둔다.
+     */
+    @Transactional
+    public void leaveRoom(Long roomId, User user) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        RoomMember member = roomMemberRepository.findByRoomAndUser(room, user)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_ROOM_MEMBER));
+
+        if (betRepository.existsUnsettledBetOf(room, user,
+                List.of(BetStatus.PENDING, BetStatus.ACCEPTED))) {
+            throw new CustomException(ErrorCode.BET_IN_PROGRESS);
+        }
+
+        roomMemberRepository.delete(member);
+        roomMemberRepository.flush();
+
+        if (roomMemberRepository.countByRoom(room) == 0 && !betRepository.existsByRoom(room)) {
+            roomRepository.delete(room);
+        }
     }
 
     /**

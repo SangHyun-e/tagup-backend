@@ -5,6 +5,7 @@ import com.tagup.backend.user.dto.UpdateFavoriteTeamRequest;
 import com.tagup.backend.user.dto.UserProfileResponse;
 import com.tagup.backend.user.entity.User;
 import com.tagup.backend.user.service.UserService;
+import com.tagup.backend.user.service.WithdrawService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserService userService;
+    private final WithdrawService withdrawService;
 
     @Operation(summary = "내 프로필 조회")
     @GetMapping("/me")
@@ -36,5 +38,13 @@ public class UserController {
             @AuthenticationPrincipal User user,
             @RequestBody @Valid UpdateFavoriteTeamRequest request) {
         return ResponseEntity.ok(ApiResponse.ok(userService.updateFavoriteTeam(user, request)));
+    }
+
+    @Operation(summary = "회원 탈퇴",
+            description = "계정을 지운다. 내기 기록에는 '탈퇴한 사용자'로 남고 개인정보는 제거된다. 되돌릴 수 없다.")
+    @DeleteMapping("/me")
+    public ResponseEntity<ApiResponse<Void>> withdraw(@AuthenticationPrincipal User user) {
+        withdrawService.withdraw(user);
+        return ResponseEntity.ok(ApiResponse.ok("탈퇴가 완료됐습니다."));
     }
 }
