@@ -13,6 +13,8 @@ public enum ErrorCode {
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다."),
     FORBIDDEN(HttpStatus.FORBIDDEN, "접근 권한이 없습니다."),
     CANNOT_BLOCK_SELF(HttpStatus.BAD_REQUEST, "자기 계정은 차단할 수 없습니다."),
+    CANNOT_REPORT_SELF(HttpStatus.BAD_REQUEST, "자기 자신은 신고할 수 없습니다."),
+    REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "신고를 찾을 수 없습니다."),
     BET_IN_PROGRESS(HttpStatus.BAD_REQUEST, "진행 중인 내기가 있어 나갈 수 없습니다. 정산 후 다시 시도해주세요."),
 
     // Room
