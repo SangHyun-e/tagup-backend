@@ -104,6 +104,23 @@ public class User {
         this.status = UserStatus.WITHDRAWN;
     }
 
+    /**
+     * 탈퇴 시 개인정보를 지운다.
+     *
+     * <p>행 자체를 지우지 않는 이유는 <b>상대방의 내기 기록</b> 때문이다. 둘이 건 내기에서 한쪽이
+     * 사라지면 남은 사람의 기록도 깨진다. 그래서 이메일·닉네임·Firebase 연결만 끊고,
+     * 기록에는 "탈퇴한 사용자"로 남는다.
+     *
+     * <p>이메일은 유니크 제약이 있어 비울 수 없다. 다시 쓸 수 없는 값으로 바꾼다.
+     */
+    public void anonymize() {
+        this.email = "withdrawn-" + id + "@tagup.invalid";
+        this.nickname = "탈퇴한 사용자";
+        this.firebaseUid = null;
+        this.password = null;
+        this.favoriteTeam = null;
+    }
+
     public void updateFavoriteTeam(Team team) {
         this.favoriteTeam = team;
     }

@@ -5,6 +5,7 @@ import com.tagup.backend.bet.entity.BetStatus;
 import com.tagup.backend.bet.entity.BetType;
 import com.tagup.backend.game.entity.Game;
 import com.tagup.backend.room.entity.Room;
+import com.tagup.backend.user.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -15,6 +16,19 @@ public interface BetRepository extends JpaRepository<Bet, Long> {
 
     @Query("SELECT b FROM Bet b JOIN FETCH b.proposer LEFT JOIN FETCH b.receiver JOIN FETCH b.game g JOIN FETCH g.homeTeam JOIN FETCH g.awayTeam WHERE b.room = :room ORDER BY b.createdAt DESC")
     List<Bet> findAllByRoomWithDetails(@Param("room") Room room);
+
+    boolean existsByRoom(Room room);
+
+    /** 아직 끝나지 않은 내기에 이 사람이 끼어 있는지 — 나가기 전에 막기 위한 확인 */
+    @Query("SELECT COUNT(b) > 0 FROM Bet b WHERE b.room = :room AND b.status IN :statuses "
+         + "AND (b.proposer = :user OR b.receiver = :user)")
+    boolean existsUnsettledBetOf(@Param("room") Room room,
+                                 @Param("user") User user,
+                                 @Param("statuses") List<BetStatus> statuses);
+
+    /** 탈퇴 처리용 — 이 사람이 건 아직 성립 전 내기 */
+    @Query("SELECT b FROM Bet b WHERE b.proposer = :user AND b.status = :status")
+    List<Bet> findByProposerAndStatus(@Param("user") User user, @Param("status") BetStatus status);
 
     List<Bet> findByGameAndStatusIn(Game game, List<BetStatus> statuses);
 

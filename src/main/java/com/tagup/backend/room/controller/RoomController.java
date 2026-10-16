@@ -83,4 +83,14 @@ public class RoomController {
     ) {
         return ResponseEntity.ok(ApiResponse.ok(roomService.getRoomMembers(roomId, user)));
     }
+
+    @Operation(summary = "더그아웃 나가기",
+            description = "정산이 남은 내기가 있으면 거절한다. 마지막 멤버가 나가면 더그아웃도 정리된다.")
+    @DeleteMapping("/{roomId}/members/me")
+    public ResponseEntity<ApiResponse<Void>> leaveRoom(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal User user) {
+        roomService.leaveRoom(roomId, user);
+        return ResponseEntity.ok(ApiResponse.ok("더그아웃에서 나왔습니다."));
+    }
 }
