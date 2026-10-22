@@ -1,10 +1,16 @@
 package com.tagup.backend.room.service;
 
+import com.tagup.backend.bet.repository.BetRepository;
+import com.tagup.backend.bet.entity.BetStatus;
 import com.tagup.backend.common.exception.CustomException;
 import com.tagup.backend.common.exception.ErrorCode;
+import com.tagup.backend.game.entity.Game;
+import com.tagup.backend.game.repository.GameRepository;
 import com.tagup.backend.room.dto.CreateRoomRequest;
 import com.tagup.backend.room.dto.JoinRoomRequest;
+import com.tagup.backend.room.dto.RoomMemberResponse;
 import com.tagup.backend.room.dto.RoomResponse;
+import com.tagup.backend.room.dto.UpdateWatchingGameRequest;
 import com.tagup.backend.room.entity.Room;
 import com.tagup.backend.room.entity.RoomMember;
 import com.tagup.backend.room.repository.RoomMemberRepository;
@@ -15,6 +21,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 @Service
@@ -27,6 +35,9 @@ public class RoomService {
 
     private final RoomRepository roomRepository;
     private final RoomMemberRepository roomMemberRepository;
+    private final GameRepository gameRepository;
+    private final BetRepository betRepository;
+    private final WatchingGameSuggester watchingGameSuggester = new WatchingGameSuggester();
 
     @Transactional
     public RoomResponse createRoom(CreateRoomRequest request, User user) {
@@ -47,6 +58,13 @@ public class RoomService {
 
         roomMemberRepository.save(member);
 
+        // 매일 아침 스케줄러가 관전 경기를 정하지만, 오늘 만든 방은 그때까지 비어 있게 된다.
+        // 만든 사람의 응원팀이 오늘 경기에 있으면 바로 잡아준다.
+        watchingGameSuggester
+                .suggest(Collections.singletonList(user.getFavoriteTeam()),
+                        gameRepository.findByGameDateWithTeams(LocalDate.now()))
+                .ifPresent(room::setWatchingGame);
+
         return RoomResponse.from(room);
     }
 
@@ -65,6 +83,13 @@ public class RoomService {
                 .build();
 
         roomMemberRepository.save(member);
+
+        // 매일 아침 스케줄러가 관전 경기를 정하지만, 오늘 만든 방은 그때까지 비어 있게 된다.
+        // 만든 사람의 응원팀이 오늘 경기에 있으면 바로 잡아준다.
+        watchingGameSuggester
+                .suggest(Collections.singletonList(user.getFavoriteTeam()),
+                        gameRepository.findByGameDateWithTeams(LocalDate.now()))
+                .ifPresent(room::setWatchingGame);
 
         return RoomResponse.from(room);
     }
@@ -85,6 +110,75 @@ public class RoomService {
             throw new CustomException(ErrorCode.FORBIDDEN);
         }
 
+        return RoomResponse.from(room);
+    }
+
+    @Transactional(readOnly = true)
+    public List<RoomMemberResponse> getRoomMembers(Long roomId, User user) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        if (!roomMemberRepository.existsByRoomAndUser(room, user)) {
+            throw new CustomException(ErrorCode.FORBIDDEN);
+        }
+
+        return roomMemberRepository.findAllByRoomWithUser(room).stream()
+                .map(RoomMemberResponse::from)
+                .toList();
+    }
+
+    /**
+     * 더그아웃에서 나간다.
+     *
+     * <p><b>정산이 남은 내기가 있으면 막는다.</b> 나간 사람의 내기를 나중에 정산하면 결과를 보여줄
+     * 곳이 없고, 상대방은 영문도 모른 채 기다리게 된다. 먼저 정산하거나 취소하고 나가야 한다.
+     *
+     * <p>마지막 한 명이 나가면 방도 정리한다 — 아무도 못 들어오는 방이 태그코드만 붙잡고 있을
+     * 이유가 없다. 다만 내기 기록이 남아 있으면 방을 지울 수 없으므로 그대로 둔다.
+     */
+    @Transactional
+    public void leaveRoom(Long roomId, User user) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        RoomMember member = roomMemberRepository.findByRoomAndUser(room, user)
+                .orElseThrow(() -> new CustomException(ErrorCode.NOT_ROOM_MEMBER));
+
+        if (betRepository.existsUnsettledBetOf(room, user,
+                List.of(BetStatus.PENDING, BetStatus.ACCEPTED))) {
+            throw new CustomException(ErrorCode.BET_IN_PROGRESS);
+        }
+
+        roomMemberRepository.delete(member);
+        roomMemberRepository.flush();
+
+        if (roomMemberRepository.countByRoom(room) == 0 && !betRepository.existsByRoom(room)) {
+            roomRepository.delete(room);
+        }
+    }
+
+    /**
+     * 더그아웃이 오늘 볼 경기를 지정한다.
+     *
+     * <p>매일 아침 {@code RoomWatchingGameScheduler}가 멤버들의 응원팀을 보고 자동으로
+     * 정하지만, 그 추측이 틀렸거나 다른 경기를 보고 싶을 때 직접 바꾼다.
+     *
+     * @param gameId null이면 해제
+     */
+    @Transactional
+    public RoomResponse updateWatchingGame(Long roomId, UpdateWatchingGameRequest request, User user) {
+        Room room = roomRepository.findById(roomId)
+                .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+
+        if (!roomMemberRepository.existsByRoomAndUser(room, user)) {
+            throw new CustomException(ErrorCode.NOT_ROOM_MEMBER);
+        }
+
+        Game game = request.gameId() == null ? null
+                : gameRepository.findById(request.gameId())
+                        .orElseThrow(() -> new CustomException(ErrorCode.GAME_NOT_FOUND));
+
+        room.setWatchingGame(game);
         return RoomResponse.from(room);
     }
 
