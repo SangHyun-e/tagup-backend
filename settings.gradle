@@ -1,1 +1,6 @@
+plugins {
+    // JDK를 자동 다운로드해 toolchain 을 충족시킨다 (sudo 없이 JDK 25 확보)
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
 rootProject.name = 'tagup-backend'

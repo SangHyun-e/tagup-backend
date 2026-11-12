@@ -19,7 +19,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtUtil jwtUtil;
     private final UserRepository userRepository;
 
     @Bean
@@ -34,16 +33,23 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/teams").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/games/**").permitAll()
+                        // 관리자 API — 크롤링을 수동으로 돌리는 엔드포인트다. 열어두면 아무나
+                        // 우리 서버를 통해 KBO를 두드릴 수 있다 (2026-09-30까지 열려 있었다)
+                        .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers(
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/v3/api-docs/**",
-                                "/h2-console/**"
+                                "/h2-console/**",
+                                "/actuator/health"
                         ).permitAll()
                         .anyRequest().authenticated()
                 )
-                .headers(headers -> headers.frameOptions(f -> f.sameOrigin())) // H2 console
-                .addFilterBefore(new JwtFilter(jwtUtil, userRepository), UsernamePasswordAuthenticationFilter.class)
+                .headers(headers -> headers.frameOptions(f -> f.sameOrigin()))
+                .addFilterBefore(new FirebaseTokenFilter(userRepository),
+                        UsernamePasswordAuthenticationFilter.class)
                 .build();
     }
 }
